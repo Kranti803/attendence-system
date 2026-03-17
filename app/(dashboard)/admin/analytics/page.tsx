@@ -37,30 +37,30 @@ function AttendanceTrendChart() {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
       <defs>
         <linearGradient id="trendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#4F46E5" stopOpacity="0" />
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
       {[0, 25, 50, 75, 100].map((v) => {
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={v}>
-            <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="#E2E8F0" strokeDasharray="4 4" />
-            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94A3B8">
+            <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="currentColor" strokeOpacity="0.12" strokeDasharray="4 4" />
+            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.55">
               {v}%
             </text>
           </g>
         );
       })}
       <polygon points={areaPoints} fill="url(#trendGrad)" />
-      <polyline points={points} fill="none" stroke="#4F46E5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {values.map((v, i) => {
         const x = padX + (i / (values.length - 1)) * chartW;
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={i}>
-            <circle cx={x} cy={y} r="4" fill="#4F46E5" stroke="white" strokeWidth="2" />
-            <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="#64748B" fontWeight="500">
+            <circle cx={x} cy={y} r="4" fill="currentColor" stroke="white" strokeWidth="2" />
+            <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
               {months[i]}
             </text>
           </g>
@@ -73,11 +73,11 @@ function AttendanceTrendChart() {
 /* ─── SVG Chart: Department Comparison (Bar) ─── */
 function DepartmentChart() {
   const departments = [
-    { name: "CS", value: 94, color: "#4F46E5" },
-    { name: "Math", value: 88, color: "#818CF8" },
-    { name: "Physics", value: 82, color: "#A5B4FC" },
-    { name: "Eng", value: 91, color: "#6366F1" },
-    { name: "Bio", value: 86, color: "#C7D2FE" },
+    { name: "CS", value: 94 },
+    { name: "Math", value: 88 },
+    { name: "Physics", value: 82 },
+    { name: "Eng", value: 91 },
+    { name: "Bio", value: 86 },
   ];
   const max = 100;
   const h = 220;
@@ -94,8 +94,8 @@ function DepartmentChart() {
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={v}>
-            <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="#E2E8F0" strokeDasharray="4 4" />
-            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94A3B8">
+            <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="currentColor" strokeOpacity="0.12" strokeDasharray="4 4" />
+            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.55">
               {v}%
             </text>
           </g>
@@ -107,11 +107,11 @@ function DepartmentChart() {
         const y = padY + chartH - barH;
         return (
           <g key={d.name}>
-            <rect x={x} y={y} width={barW} height={barH} rx={6} fill={d.color} opacity={0.85} />
-            <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fill="#334155" fontWeight="600">
+            <rect x={x} y={y} width={barW} height={barH} rx={6} fill="currentColor" opacity={0.75} />
+            <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.85" fontWeight="600">
               {d.value}%
             </text>
-            <text x={x + barW / 2} y={h - 4} textAnchor="middle" fontSize="11" fill="#64748B" fontWeight="500">
+            <text x={x + barW / 2} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
               {d.name}
             </text>
           </g>
@@ -130,25 +130,25 @@ function RecognitionDonut() {
   const offset = circumference - (value / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center justify-center py-4">
+    <div className="flex flex-col items-center justify-center py-4 text-primary">
       <svg width="180" height="180" viewBox="0 0 180 180">
-        <circle cx="90" cy="90" r={radius} fill="none" stroke="#E2E8F0" strokeWidth={stroke} />
+        <circle cx="90" cy="90" r={radius} fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth={stroke} />
         <circle
           cx="90"
           cy="90"
           r={radius}
           fill="none"
-          stroke="#4F46E5"
+          stroke="currentColor"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform="rotate(-90 90 90)"
         />
-        <text x="90" y="85" textAnchor="middle" fontSize="28" fontWeight="700" fill="#0F172A">
+        <text x="90" y="85" textAnchor="middle" fontSize="28" fontWeight="700" fill="currentColor">
           {value}%
         </text>
-        <text x="90" y="105" textAnchor="middle" fontSize="12" fill="#64748B">
+        <text x="90" y="105" textAnchor="middle" fontSize="12" fill="currentColor" opacity="0.7">
           Success Rate
         </text>
       </svg>
@@ -171,7 +171,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* ── Recognition Stats Row ── */}
-        <div className="grid gap-4 sm:grid-cols-3 stagger-children">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Card className="relative overflow-hidden">
             <CardContent className="flex items-center gap-4 p-5">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
@@ -221,7 +221,9 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <AttendanceTrendChart />
+              <div className="text-primary">
+                <AttendanceTrendChart />
+              </div>
             </CardContent>
           </Card>
 
@@ -234,7 +236,9 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DepartmentChart />
+              <div className="text-primary">
+                <DepartmentChart />
+              </div>
             </CardContent>
           </Card>
         </div>

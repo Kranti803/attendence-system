@@ -31,7 +31,7 @@ export default function StudentProfilePage() {
         {/* ── Profile Header Card ── */}
         <Card className="relative overflow-hidden">
           {/* Banner */}
-          <div className="h-32 bg-gradient-to-r from-primary via-primary-light to-indigo-400" />
+          <div className="h-32 bg-linear-to-r from-primary via-primary-light to-primary-dark" />
           <CardContent className="relative px-6 pb-6">
             <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12">
               {/* Avatar */}

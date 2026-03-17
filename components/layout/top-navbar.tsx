@@ -4,6 +4,8 @@ import React from "react";
 import { Bell, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function TopNavbar({
   title,
@@ -14,11 +16,15 @@ export function TopNavbar({
 }) {
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-md">
-      {/* ── Page Title ── */}
-      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      {/* ── Left Section ── */}
+      <div className="flex items-center gap-3">
+        <SidebarTrigger className="-ml-1" />
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      </div>
 
       {/* ── Right Section ── */}
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         {/* Search */}
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

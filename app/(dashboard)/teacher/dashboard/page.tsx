@@ -29,7 +29,7 @@ import {
 
 /* ─── Static Data ─── */
 const stats = [
-  { label: "Today's Classes", value: "4", icon: BookOpen, color: "bg-indigo-50 text-indigo-600" },
+  { label: "Today's Classes", value: "4", icon: BookOpen, color: "bg-primary/10 text-primary" },
   { label: "Active Session", value: "CS101", icon: Play, color: "bg-emerald-50 text-emerald-600" },
   { label: "Students Present", value: "32", icon: Users, color: "bg-amber-50 text-amber-600" },
   { label: "Attendance Rate", value: "89%", icon: TrendingUp, color: "bg-violet-50 text-violet-600" },
@@ -56,7 +56,7 @@ export default function TeacherDashboardPage() {
       <TopNavbar title="Dashboard" userInitials="SW" />
       <div className="p-6 space-y-6">
         {/* ── Stats Cards ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger-children">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
             <Card key={stat.label}>
               <CardContent className="p-5">
@@ -91,11 +91,11 @@ export default function TeacherDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="relative flex aspect-video items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
+              <div className="relative flex aspect-video items-center justify-center rounded-xl bg-linear-to-br from-slate-800 to-slate-900 overflow-hidden">
                 {/* Scanline animation overlay */}
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px]" />
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-size-[100%_4px]" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
-                  <Camera className="h-12 w-12 mb-3 animate-pulse-soft" />
+                  <Camera className="h-12 w-12 mb-3" />
                   <p className="text-lg font-semibold">Camera Feed Placeholder</p>
                   <p className="text-sm text-white/40 mt-1">Face recognition active — CS101</p>
                 </div>

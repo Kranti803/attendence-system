@@ -59,7 +59,7 @@ export default function AttendanceHistoryPage() {
         </div>
 
         {/* ── Quick Stats ── */}
-        <div className="grid gap-4 sm:grid-cols-3 stagger-children">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Card>
             <CardContent className="p-5 text-center">
               <p className="text-sm text-muted-foreground">Total Classes</p>

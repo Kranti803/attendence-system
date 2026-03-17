@@ -34,7 +34,7 @@ const stats = [
     change: "+12%",
     trend: "up" as const,
     icon: Users,
-    color: "bg-indigo-50 text-indigo-600",
+    color: "bg-primary/10 text-primary",
   },
   {
     label: "Total Teachers",
@@ -42,7 +42,7 @@ const stats = [
     change: "+3%",
     trend: "up" as const,
     icon: GraduationCap,
-    color: "bg-emerald-50 text-emerald-600",
+    color: "bg-emerald-500/10 text-emerald-600",
   },
   {
     label: "Total Classes",
@@ -50,7 +50,7 @@ const stats = [
     change: "0%",
     trend: "neutral" as const,
     icon: BookOpen,
-    color: "bg-amber-50 text-amber-600",
+    color: "bg-amber-500/10 text-amber-600",
   },
   {
     label: "Today's Attendance",
@@ -58,7 +58,7 @@ const stats = [
     change: "+2.1%",
     trend: "up" as const,
     icon: TrendingUp,
-    color: "bg-violet-50 text-violet-600",
+    color: "bg-violet-500/10 text-violet-600",
   },
 ];
 
@@ -98,34 +98,30 @@ function WeeklyChart() {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
       <defs>
         <linearGradient id="lineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#4F46E5" stopOpacity="0" />
+          <stop offset="0%" stopColor="oklch(0.46 0.22 265)" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="oklch(0.46 0.22 265)" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Grid lines */}
       {[0, 25, 50, 75, 100].map((v) => {
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={v}>
-            <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="#E2E8F0" strokeDasharray="4 4" />
-            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94A3B8">
+            <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="oklch(0.91 0.01 260)" strokeDasharray="4 4" />
+            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="oklch(0.6 0.02 260)">
               {v}%
             </text>
           </g>
         );
       })}
-      {/* Area */}
       <polygon points={areaPoints} fill="url(#lineGrad)" />
-      {/* Line */}
-      <polyline points={points} fill="none" stroke="#4F46E5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Dots & labels */}
+      <polyline points={points} fill="none" stroke="oklch(0.46 0.22 265)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {values.map((v, i) => {
         const x = padX + (i / (values.length - 1)) * chartW;
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={i}>
-            <circle cx={x} cy={y} r="4" fill="#4F46E5" stroke="white" strokeWidth="2" />
-            <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="#64748B" fontWeight="500">
+            <circle cx={x} cy={y} r="4" fill="oklch(0.46 0.22 265)" stroke="white" strokeWidth="2" />
+            <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="oklch(0.5 0.02 260)" fontWeight="500">
               {days[i]}
             </text>
           </g>
@@ -142,7 +138,7 @@ export default function AdminDashboardPage() {
       <TopNavbar title="Dashboard" userInitials="AU" />
       <div className="p-6 space-y-6">
         {/* ── Stats Cards ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger-children">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
             <Card key={stat.label} className="relative overflow-hidden">
               <CardContent className="p-5">
@@ -158,13 +154,13 @@ export default function AdminDashboardPage() {
                       {stat.trend === "up" ? (
                         <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
                       ) : (
-                        <ArrowDownRight className="h-3.5 w-3.5 text-red-500" />
+                        <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
                       )}
                       <span
                         className={`text-xs font-medium ${
                           stat.trend === "up"
                             ? "text-emerald-600"
-                            : "text-red-600"
+                            : "text-destructive"
                         }`}
                       >
                         {stat.change} from last week
@@ -211,7 +207,7 @@ export default function AdminDashboardPage() {
                   key={i}
                   className="flex items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary text-xs font-semibold">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
                     {item.student
                       .split(" ")
                       .map((n) => n[0])

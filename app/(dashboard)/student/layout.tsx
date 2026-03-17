@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/layout/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 export default function StudentLayout({
   children,
@@ -6,9 +7,9 @@ export default function StudentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background">
+    <SidebarProvider>
       <Sidebar role="student" />
-      <main className="pl-[272px]">{children}</main>
-    </div>
+      <SidebarInset className="bg-background">{children}</SidebarInset>
+    </SidebarProvider>
   );
 }

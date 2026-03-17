@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   Card,
@@ -18,6 +19,10 @@ import {
   XCircle,
   RotateCcw,
   Users,
+  Pause,
+  Timer,
+  ChevronDown,
+  ShieldAlert,
 } from "lucide-react";
 
 /* ─── Static Data ─── */
@@ -35,41 +40,158 @@ const recognizedStudents = [
 ];
 
 export default function TeacherAttendancePage() {
+  const [subject, setSubject] = React.useState("CS101");
+  const [classId, setClassId] = React.useState("CS101-A");
+  const [sessionState, setSessionState] = React.useState<
+    "idle" | "running" | "paused" | "ended"
+  >("idle");
+
   const present = recognizedStudents.filter((s) => s.status === "Present").length;
   const late = recognizedStudents.filter((s) => s.status === "Late").length;
   const absent = recognizedStudents.filter((s) => s.status === "Absent").length;
+
+  const lowConfidence = recognizedStudents.filter(
+    (s) => s.confidence > 0 && s.confidence < 95
+  ).length;
+  const unknownFaces = 2;
+
+  const sessionBadge =
+    sessionState === "running"
+      ? { variant: "success" as const, label: "Running" }
+      : sessionState === "paused"
+      ? { variant: "warning" as const, label: "Paused" }
+      : sessionState === "ended"
+      ? { variant: "secondary" as const, label: "Ended" }
+      : { variant: "secondary" as const, label: "Idle" };
 
   return (
     <>
       <TopNavbar title="Attendance" userInitials="SW" />
       <div className="p-6 space-y-6">
         {/* ── Header ── */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Take Attendance
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-foreground">
+                Take Attendance
+              </h1>
+              <Badge variant={sessionBadge.variant} className="h-6">
+                {sessionBadge.label}
+              </Badge>
+            </div>
             <p className="text-sm text-muted-foreground">
-              CS101 — Introduction to Computer Science · Room 201
+              Select a subject and class, then start a session to begin live
+              recognition.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSessionState("idle")}
+            >
               <RotateCcw className="h-4 w-4" />
               Reset
             </Button>
-            <Button size="sm" variant="success">
+            <Button
+              size="sm"
+              disabled={sessionState !== "ended"}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
               <CheckCircle2 className="h-4 w-4" />
               Submit Attendance
             </Button>
           </div>
         </div>
 
+        {/* ── Step 1: Select Subject/Class ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">1) Select subject and class</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Subject
+                </span>
+                <div className="relative">
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="CS101">CS101 — Intro to CS</option>
+                    <option value="CS401">CS401 — Machine Learning</option>
+                    <option value="MATH201">MATH201 — Linear Algebra</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Class / Section
+                </span>
+                <div className="relative">
+                  <select
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value)}
+                    className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="CS101-A">Section A · Room 201 · 09:00</option>
+                    <option value="CS101-B">Section B · Room 202 · 11:00</option>
+                    <option value="CS401-B">Section B · Room 305 · 11:00</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </label>
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Session
+                </span>
+                <div className="flex gap-3">
+                  <Button
+                    className="flex-1"
+                    disabled={sessionState === "running"}
+                    onClick={() => setSessionState("running")}
+                  >
+                    <Play className="h-4 w-4" />
+                    Start
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={sessionState !== "running"}
+                    onClick={() => setSessionState("paused")}
+                  >
+                    <Pause className="h-4 w-4" />
+                    Pause
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Timer className="h-3.5 w-3.5" />
+                Session time: 12:34 (mock)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                Camera permissions required on first run
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-mono">
+                {subject} · {classId}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ── Session Stats ── */}
-        <div className="grid gap-4 sm:grid-cols-4 stagger-children">
+        <div className="grid gap-4 sm:grid-cols-4">
           <Card>
             <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Users className="h-5 w-5" />
               </div>
               <div>
@@ -113,6 +235,62 @@ export default function TeacherAttendancePage() {
           </Card>
         </div>
 
+        {/* ── Review queue (mock) ── */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Low-confidence</p>
+              <p className="mt-1 text-3xl font-bold text-foreground">
+                {lowConfidence}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Suggested manual review
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Unknown faces</p>
+              <p className="mt-1 text-3xl font-bold text-foreground">
+                {unknownFaces}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Needs matching or ignore
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Session status</p>
+              <p className="mt-1 text-3xl font-bold text-primary">
+                {sessionBadge.label}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  disabled={sessionState !== "paused"}
+                  onClick={() => setSessionState("running")}
+                >
+                  <Play className="h-4 w-4" />
+                  Resume
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1"
+                  disabled={sessionState === "idle" || sessionState === "ended"}
+                  onClick={() => setSessionState("ended")}
+                >
+                  <Square className="h-4 w-4" />
+                  End
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* ── Camera + Student List ── */}
         <div className="grid gap-6 lg:grid-cols-5">
           {/* Camera Feed */}
@@ -130,8 +308,8 @@ export default function TeacherAttendancePage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="relative flex aspect-video items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px]" />
+              <div className="relative flex aspect-video items-center justify-center rounded-xl bg-linear-to-br from-slate-800 to-slate-900 overflow-hidden">
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-size-[100%_4px]" />
 
                 {/* Sample face detection boxes */}
                 <div className="absolute top-[20%] left-[25%] h-16 w-14 border-2 border-emerald-400 rounded-md">
@@ -151,7 +329,7 @@ export default function TeacherAttendancePage() {
                 </div>
 
                 <div className="flex flex-col items-center justify-center text-white/40 z-10">
-                  <Camera className="h-10 w-10 mb-2 animate-pulse-soft" />
+                  <Camera className="h-10 w-10 mb-2" />
                   <p className="text-sm font-medium">Face Recognition Active</p>
                 </div>
 

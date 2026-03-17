@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, BookOpen, MapPin } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /* ─── Static Data ─── */
 const courses = [
-  { name: "CS101 — Intro to CS",        attendance: 92, total: 25, attended: 23, color: "#4F46E5" },
-  { name: "MATH201 — Linear Algebra",   attendance: 88, total: 24, attended: 21, color: "#6366F1" },
-  { name: "PHY301 — Quantum Physics",   attendance: 76, total: 22, attended: 17, color: "#818CF8" },
-  { name: "ENG102 — Technical Writing", attendance: 96, total: 20, attended: 19, color: "#A5B4FC" },
+  { name: "CS101 — Intro to CS",        attendance: 92, total: 25, attended: 23, tone: "bg-primary" },
+  { name: "MATH201 — Linear Algebra",   attendance: 88, total: 24, attended: 21, tone: "bg-primary/80" },
+  { name: "PHY301 — Quantum Physics",   attendance: 76, total: 22, attended: 17, tone: "bg-primary/60" },
+  { name: "ENG102 — Technical Writing", attendance: 96, total: 20, attended: 19, tone: "bg-primary/90" },
 ];
 
 const upcomingClasses = [
@@ -31,29 +32,30 @@ function OverallAttendanceDonut({ value }: { value: number }) {
   const stroke = 12;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (value / 100) * circumference;
-  const color = value >= 90 ? "#22C55E" : value >= 75 ? "#F59E0B" : "#EF4444";
+  const colorClass =
+    value >= 90 ? "text-emerald-500" : value >= 75 ? "text-amber-500" : "text-red-500";
 
   return (
     <div className="flex flex-col items-center justify-center">
       <svg width="190" height="190" viewBox="0 0 190 190">
-        <circle cx="95" cy="95" r={radius} fill="none" stroke="#E2E8F0" strokeWidth={stroke} />
+        <circle cx="95" cy="95" r={radius} fill="none" stroke="currentColor" opacity="0.12" strokeWidth={stroke} />
         <circle
           cx="95"
           cy="95"
           r={radius}
           fill="none"
-          stroke={color}
+          className={cn(colorClass, "transition-all duration-1000")}
+          stroke="currentColor"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform="rotate(-90 95 95)"
-          className="transition-all duration-1000"
         />
-        <text x="95" y="88" textAnchor="middle" fontSize="32" fontWeight="700" fill="#0F172A">
+        <text x="95" y="88" textAnchor="middle" fontSize="32" fontWeight="700" fill="currentColor">
           {value}%
         </text>
-        <text x="95" y="110" textAnchor="middle" fontSize="12" fill="#64748B">
+        <text x="95" y="110" textAnchor="middle" fontSize="12" fill="currentColor" opacity="0.7">
           Overall
         </text>
       </svg>
@@ -112,10 +114,7 @@ export default function StudentDashboardPage() {
                 <div key={course.name} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: course.color }}
-                      />
+                      <div className={cn("h-3 w-3 rounded-full", course.tone)} />
                       <span className="text-sm font-medium text-foreground">
                         {course.name}
                       </span>
@@ -139,11 +138,11 @@ export default function StudentDashboardPage() {
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${course.attendance}%`,
-                        backgroundColor: course.color,
-                      }}
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        course.tone
+                      )}
+                      style={{ width: `${course.attendance}%` }}
                     />
                   </div>
                 </div>
