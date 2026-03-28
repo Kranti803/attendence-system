@@ -26,6 +26,7 @@ import {
   Camera,
   Clock,
 } from "lucide-react";
+import { StudentVerificationMap } from "./_components/student-verification-map";
 
 /* ─── Static Data ─── */
 const stats = [
@@ -158,6 +159,9 @@ export default function TeacherDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Student Verification Map ── */}
+        <StudentVerificationMap />
 
         {/* ── Today's Classes ── */}
         <Card>

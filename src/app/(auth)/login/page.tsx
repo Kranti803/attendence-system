@@ -1,14 +1,67 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useLogin, useProfile } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { setCookie } from "@/utils/cookie";
+
 import Link from "next/link";
-import { ScanFace, ArrowRight, Mail, LockKeyhole } from "lucide-react";
+import {
+  ScanFace,
+  ArrowRight,
+  Mail,
+  LockKeyhole,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const loginMutation = useLogin();
+  const { refetch: fetchProfile } = useProfile(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate(
+      { email, password },
+      {
+        onSuccess: async (data) => {
+          setCookie("accessToken", data.access, 7);
+          setCookie("refreshToken", data.refresh, 7);
+          try {
+            const { data: profile } = await fetchProfile();
+
+            if (!profile) throw new Error("Could not fetch profile");
+            toast.success("Signed in successfully!");
+
+            const role = profile.user_type.toLowerCase();
+            setCookie("role", role, 7);
+            router.push(`/${role}/dashboard`);
+            router.refresh();
+          } catch {
+            toast.error("Could not load profile. Please try again.");
+          }
+        },
+        onError: (error: any) => {
+          const msg =
+            error?.response?.data?.message ||
+            "Invalid credentials. Please try again.";
+          toast.error(msg);
+        },
+      },
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Background */}
@@ -70,71 +123,97 @@ export default function LoginPage() {
                       Use your institutional credentials.
                     </p>
                   </div>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+                  <Link
+                    href="/"
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
                     Back
                   </Link>
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="email"
-                      placeholder="you@university.edu"
-                      className="h-11 pl-9"
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
-                      Password
+                      Email
                     </label>
-                    <Link
-                      href="#"
-                      className="text-sm font-medium text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </Link>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        placeholder="you@university.edu"
+                        className="h-11 pl-9"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
-                  <div className="relative">
-                    <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      className="h-11 pl-9"
-                      autoComplete="current-password"
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-foreground">
+                        Password
+                      </label>
+                      <Link
+                        href="#"
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="h-11 pl-9 pr-10"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-hidden"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border border-input accent-primary"
                     />
-                  </div>
-                </div>
+                    Remember me
+                  </label>
 
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border border-input accent-primary"
-                  />
-                  Remember me
-                </label>
+                  <Button
+                    type="submit"
+                    className="h-11 w-full text-base"
+                    disabled={loginMutation.isPending}
+                  >
+                    {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                    {!loginMutation.isPending && (
+                      <ArrowRight className="h-5 w-5 ml-2" />
+                    )}
+                  </Button>
+                </form>
 
-                <Button className="h-11 w-full text-base">
-                  Sign in
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-
-                <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">
                     Demo navigation (UI only)
                   </p>
-                  <p className="mt-1">
-                    Jump directly to a portal for preview:
-                  </p>
+                  <p className="mt-1">Jump directly to a portal for preview:</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <Link href="/admin/dashboard">
                       <Button variant="outline" size="sm" className="w-full">
@@ -156,7 +235,10 @@ export default function LoginPage() {
 
                 <p className="text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{" "}
-                  <Link href="#" className="font-medium text-primary hover:underline">
+                  <Link
+                    href="#"
+                    className="font-medium text-primary hover:underline"
+                  >
                     Contact admin
                   </Link>
                 </p>
@@ -172,4 +254,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
