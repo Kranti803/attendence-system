@@ -24,7 +24,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { BookOpen, Download, Filter, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Download,
+  Filter,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 const subjects = [
   {
@@ -111,8 +119,8 @@ export default function AdminSubjectsPage() {
                   <DialogHeader>
                     <DialogTitle>Add Subject</DialogTitle>
                     <DialogDescription>
-                      Create a subject and optionally assign a teacher.
-                      Fields marked{" "}
+                      Create a subject and optionally assign a teacher. Fields
+                      marked{" "}
                       <span className="font-medium text-foreground">*</span> are
                       required.
                     </DialogDescription>
@@ -127,13 +135,15 @@ export default function AdminSubjectsPage() {
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
                           <label className="text-sm font-medium text-foreground">
-                            Subject Name <span className="text-destructive">*</span>
+                            Subject Name{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <Input placeholder="e.g. Linear Algebra" required />
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Subject Code <span className="text-destructive">*</span>
+                            Subject Code{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <Input placeholder="e.g. MATH201" required />
                           <p className="text-xs text-muted-foreground">
@@ -151,7 +161,8 @@ export default function AdminSubjectsPage() {
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Department <span className="text-destructive">*</span>
+                            Department{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <select
                             required
@@ -171,7 +182,9 @@ export default function AdminSubjectsPage() {
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
                             Semester / Year{" "}
-                            <span className="text-muted-foreground">(optional)</span>
+                            <span className="text-muted-foreground">
+                              (optional)
+                            </span>
                           </label>
                           <select
                             defaultValue=""
@@ -228,7 +241,9 @@ export default function AdminSubjectsPage() {
                       <div className="mt-4 space-y-2">
                         <label className="text-sm font-medium text-foreground">
                           Description{" "}
-                          <span className="text-muted-foreground">(optional)</span>
+                          <span className="text-muted-foreground">
+                            (optional)
+                          </span>
                         </label>
                         <textarea
                           rows={4}
@@ -258,7 +273,10 @@ export default function AdminSubjectsPage() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Search by code, name, or department…" className="pl-9" />
+                <Input
+                  placeholder="Search by code, name, or department…"
+                  className="pl-9"
+                />
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" size="default">
@@ -302,8 +320,12 @@ export default function AdminSubjectsPage() {
                           <BookOpen className="h-4.5 w-4.5" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{s.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{s.code}</p>
+                          <p className="font-medium text-foreground">
+                            {s.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {s.code}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
@@ -311,7 +333,11 @@ export default function AdminSubjectsPage() {
                     <TableCell className="text-center">{s.credits}</TableCell>
                     <TableCell className="text-center">{s.semester}</TableCell>
                     <TableCell>
-                      <Badge variant={s.status === "Active" ? "success" : "secondary"}>
+                      <Badge
+                        variant={
+                          s.status === "Active" ? "success" : "secondary"
+                        }
+                      >
                         {s.status}
                       </Badge>
                     </TableCell>
@@ -335,4 +361,3 @@ export default function AdminSubjectsPage() {
     </>
   );
 }
-

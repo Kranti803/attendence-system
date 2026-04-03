@@ -2,12 +2,8 @@
 
 import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useCreateTeacher } from "@/hooks/useTeacher";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,21 +34,75 @@ import {
   Filter,
   Download,
   ChevronDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import { toast } from "sonner";
 
 /* ─── Static Data ─── */
 const teachers = [
-  { id: "TCH001", name: "Dr. Sarah Wilson",   email: "sarah@university.edu",   department: "Computer Science", courses: ["CS101", "CS401"], status: "Active" },
-  { id: "TCH002", name: "Prof. James Carter", email: "james@university.edu",   department: "Mathematics",      courses: ["MATH201", "MATH301"], status: "Active" },
-  { id: "TCH003", name: "Dr. Emily Chen",     email: "emily@university.edu",   department: "Physics",          courses: ["PHY301"], status: "Active" },
-  { id: "TCH004", name: "Prof. Mark Davis",   email: "mark@university.edu",    department: "Engineering",      courses: ["ENG102", "ENG201"], status: "On Leave" },
-  { id: "TCH005", name: "Dr. Lisa Park",      email: "lisa@university.edu",    department: "Computer Science", courses: ["CS201"], status: "Active" },
-  { id: "TCH006", name: "Prof. Robert Hill",  email: "robert@university.edu",  department: "Mathematics",      courses: ["MATH101"], status: "Active" },
-  { id: "TCH007", name: "Dr. Anna Lee",       email: "anna@university.edu",    department: "Physics",          courses: ["PHY101", "PHY201"], status: "Inactive" },
+  {
+    id: "TCH001",
+    name: "Dr. Sarah Wilson",
+    email: "sarah@university.edu",
+    department: "Computer Science",
+    courses: ["CS101", "CS401"],
+    status: "Active",
+  },
+  {
+    id: "TCH002",
+    name: "Prof. James Carter",
+    email: "james@university.edu",
+    department: "Mathematics",
+    courses: ["MATH201", "MATH301"],
+    status: "Active",
+  },
+  {
+    id: "TCH003",
+    name: "Dr. Emily Chen",
+    email: "emily@university.edu",
+    department: "Physics",
+    courses: ["PHY301"],
+    status: "Active",
+  },
+  {
+    id: "TCH004",
+    name: "Prof. Mark Davis",
+    email: "mark@university.edu",
+    department: "Engineering",
+    courses: ["ENG102", "ENG201"],
+    status: "On Leave",
+  },
+  {
+    id: "TCH005",
+    name: "Dr. Lisa Park",
+    email: "lisa@university.edu",
+    department: "Computer Science",
+    courses: ["CS201"],
+    status: "Active",
+  },
+  {
+    id: "TCH006",
+    name: "Prof. Robert Hill",
+    email: "robert@university.edu",
+    department: "Mathematics",
+    courses: ["MATH101"],
+    status: "Active",
+  },
+  {
+    id: "TCH007",
+    name: "Dr. Anna Lee",
+    email: "anna@university.edu",
+    department: "Physics",
+    courses: ["PHY101", "PHY201"],
+    status: "Inactive",
+  },
 ];
 
 export default function TeacherManagementPage() {
   const [open, setOpen] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const { mutate: createTeacher, isPending } = useCreateTeacher();
   const departments = [
     "Computer Science",
     "Mathematics",
@@ -90,7 +140,26 @@ export default function TeacherManagementPage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    setOpen(false);
+                    const formData = new FormData(e.currentTarget);
+                    const payload = {
+                      first_name: formData.get("first_name") as string,
+                      last_name: formData.get("last_name") as string,
+                      email: formData.get("email") as string,
+                      phone_no: formData.get("phone_no") as string,
+                      employee_id: formData.get("employee_id") as string,
+                      address: formData.get("address") as string,
+                      department: formData.get("department") as string,
+                      password: formData.get("password") as string,
+                    };
+                    createTeacher(payload, {
+                      onSuccess: () => {
+                        setOpen(false);
+                        toast.success("Teacher created successfully");
+                      },
+                      onError: (error) => {
+                        toast.error(error.message);
+                      },
+                    });
                   }}
                 >
                   <DialogHeader>
@@ -109,11 +178,28 @@ export default function TeacherManagementPage() {
                         Basic Info
                       </p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2 sm:col-span-2">
+                        <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Full Name <span className="text-destructive">*</span>
+                            First Name{" "}
+                            <span className="text-destructive">*</span>
                           </label>
-                          <Input placeholder="e.g. Dr. Sarah Wilson" required />
+                          <Input
+                            name="first_name"
+                            placeholder="e.g. Sarah"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">
+                            Last Name{" "}
+                            <span className="text-destructive">*</span>
+                          </label>
+                          <Input
+                            name="last_name"
+                            placeholder="e.g. Wilson"
+                            required
+                          />
                         </div>
 
                         <div className="space-y-2">
@@ -121,6 +207,7 @@ export default function TeacherManagementPage() {
                             Email <span className="text-destructive">*</span>
                           </label>
                           <Input
+                            name="email"
                             type="email"
                             placeholder="sarah@university.edu"
                             required
@@ -133,35 +220,57 @@ export default function TeacherManagementPage() {
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
                             Phone Number{" "}
-                            <span className="text-muted-foreground">(optional)</span>
+                            <span className="text-destructive">*</span>
                           </label>
-                          <Input placeholder="+1 (234) 567-8900" />
+                          <Input
+                            name="phone_no"
+                            placeholder="+1 (234) 567-8900"
+                            required
+                          />
                         </div>
 
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Employee ID <span className="text-destructive">*</span>
+                            Employee ID{" "}
+                            <span className="text-destructive">*</span>
                           </label>
-                          <Input placeholder="TCH-000123" required />
+                          <Input
+                            name="employee_id"
+                            placeholder="TCH-000123"
+                            required
+                          />
                           <p className="text-xs text-muted-foreground">
                             Must be unique.
                           </p>
                         </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">
+                            Address <span className="text-destructive">*</span>
+                          </label>
+                          <Input
+                            name="address"
+                            placeholder="123 University Ave"
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Professional Info */}
+                    {/* Professional & Security Info */}
                     <div className="rounded-2xl border border-border bg-muted/20 p-4">
                       <p className="text-sm font-semibold text-foreground">
-                        Professional Info
+                        Professional & Security Info
                       </p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Department <span className="text-destructive">*</span>
+                            Department{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <div className="relative">
                             <select
+                              name="department"
                               required
                               defaultValue=""
                               className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -179,46 +288,32 @@ export default function TeacherManagementPage() {
                           </div>
                         </div>
 
-                        <div className="space-y-2 sm:col-span-2">
+                        <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            Subjects Assigned{" "}
-                            <span className="text-muted-foreground">
-                              (optional, recommended)
-                            </span>
+                            Password <span className="text-destructive">*</span>
                           </label>
-                          <div className="grid gap-2 rounded-xl border border-border bg-background p-3 sm:grid-cols-2">
-                            {subjects.map((s) => (
-                              <label
-                                key={s}
-                                className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-foreground hover:bg-accent"
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border border-input accent-primary"
-                                />
-                                <span className="font-mono text-xs text-muted-foreground">
-                                  {s}
-                                </span>
-                              </label>
-                            ))}
+                          <div className="relative">
+                            <Input
+                              name="password"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              required
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            You can adjust assignments later from the teacher
-                            profile.
-                          </p>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Optional (future expansion) */}
-                    <div className="rounded-2xl border border-border bg-muted/10 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Optional
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Add more fields later (e.g. office location, joining
-                        date, role, notes).
-                      </p>
                     </div>
                   </div>
 
@@ -228,7 +323,9 @@ export default function TeacherManagementPage() {
                         Cancel
                       </Button>
                     </DialogClose>
-                    <Button type="submit">Create Teacher</Button>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending ? "Creating..." : "Create Teacher"}
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -323,8 +420,8 @@ export default function TeacherManagementPage() {
                           teacher.status === "Active"
                             ? "success"
                             : teacher.status === "On Leave"
-                            ? "warning"
-                            : "destructive"
+                              ? "warning"
+                              : "destructive"
                         }
                       >
                         {teacher.status}
@@ -354,11 +451,19 @@ export default function TeacherManagementPage() {
                 <Button variant="outline" size="sm" disabled>
                   Previous
                 </Button>
-                <Button variant="outline" size="sm" className="bg-primary text-primary-foreground hover:bg-primary-dark">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary-dark"
+                >
                   1
                 </Button>
-                <Button variant="outline" size="sm">2</Button>
-                <Button variant="outline" size="sm">3</Button>
+                <Button variant="outline" size="sm">
+                  2
+                </Button>
+                <Button variant="outline" size="sm">
+                  3
+                </Button>
                 <Button variant="outline" size="sm">
                   Next
                 </Button>

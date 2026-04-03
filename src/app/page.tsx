@@ -4,8 +4,6 @@ import Link from "next/link";
 import {
   ScanFace,
   ShieldCheck,
-  GraduationCap,
-  BookOpen,
   ArrowRight,
   CheckCircle2,
   Zap,
@@ -22,36 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 
 /* ─── Static Data ─── */
-const roles = [
-  {
-    title: "Admin Portal",
-    description:
-      "Manage students, teachers, classes, and view system-wide analytics with powerful dashboard tools.",
-    href: "/admin/dashboard",
-    icon: ShieldCheck,
-    gradient: "from-primary to-primary-dark",
-    bgGlow: "bg-primary/10",
-  },
-  {
-    title: "Teacher Portal",
-    description:
-      "Take attendance using face recognition, manage class sessions, and generate detailed reports.",
-    href: "/teacher/dashboard",
-    icon: GraduationCap,
-    gradient: "from-emerald-500 to-emerald-700",
-    bgGlow: "bg-emerald-500/10",
-  },
-  {
-    title: "Student Portal",
-    description:
-      "View your attendance history, track progress across courses, and manage your profile.",
-    href: "/student/dashboard",
-    icon: BookOpen,
-    gradient: "from-amber-500 to-orange-600",
-    bgGlow: "bg-amber-500/10",
-  },
-];
-
 const features = [
   {
     icon: Eye,
@@ -130,7 +98,7 @@ const faqs = [
   },
   {
     q: "Can teachers take attendance on any device?",
-    a: "Yes. The portal is responsive and works on laptops and tablets with a camera.",
+    a: "Yes. The system is responsive and works on laptops and tablets with a camera.",
   },
   {
     q: "How fast is recognition?",
@@ -160,20 +128,17 @@ export default function HomePage() {
             <a href="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               Features
             </a>
-            <a href="#portals" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              Portals
-            </a>
             <a href="#stats" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
               Stats
             </a>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/admin/dashboard">
+            <Link href="/login">
               <Button variant="outline" size="sm">
                 Sign In
               </Button>
             </Link>
-            <Link href="/admin/dashboard">
+            <Link href="/login">
               <Button size="sm">
                 Get Started <ArrowRight className="h-4 w-4" />
               </Button>
@@ -213,13 +178,12 @@ export default function HomePage() {
               <p className="mb-10 text-lg leading-relaxed text-muted-foreground">
                 Mark attendance in real time using face detection and
                 recognition, keep records clean with role-based access, and
-                understand patterns with analytics — across admin, teacher, and
-                student portals.
+                understand patterns with analytics.
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col items-start gap-4 sm:flex-row">
-                <Link href="/admin/dashboard">
+                <Link href="/login">
                   <Button
                     size="lg"
                     className="h-12 px-8 text-base rounded-xl shadow-lg shadow-primary/25"
@@ -510,55 +474,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Portal Cards ─── */}
-      <section id="portals" className="bg-muted/30">
-        <div className="mx-auto max-w-7xl px-6 py-24">
-          <div className="mx-auto mb-16 max-w-2xl text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
-              Portals
-            </div>
-            <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-              Choose your <span className="text-primary">portal</span>
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Role-specific dashboards tailored to your needs. Each portal
-              provides the tools and insights most relevant to you.
-            </p>
-          </div>
-
-          <div className="grid gap-8 md:grid-cols-3">
-            {roles.map((role, i) => (
-              <Link
-                key={role.href}
-                href={role.href}
-                className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-primary/20"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              >
-                {/* Top gradient bar */}
-                <div className={`h-1.5 bg-linear-to-r ${role.gradient}`} />
-                <div className="flex flex-1 flex-col p-8">
-                  <div
-                    className={`mb-6 flex h-14 w-14 items-center justify-center rounded-2xl ${role.bgGlow} transition-transform group-hover:scale-110`}
-                  >
-                    <role.icon className="h-7 w-7 text-foreground" />
-                  </div>
-                  <h3 className="mb-3 text-xl font-bold text-foreground">
-                    {role.title}
-                  </h3>
-                  <p className="mb-6 flex-1 text-sm leading-relaxed text-muted-foreground">
-                    {role.description}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    Enter Portal
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1.5" />
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─── FAQ ─── */}
       <section className="relative overflow-hidden border-t border-border">
         <div className="absolute -right-24 top-24 h-[420px] w-[420px] rounded-full bg-primary/8 blur-[110px]" />
@@ -606,7 +521,7 @@ export default function HomePage() {
               cleaner attendance tracking. Get started in minutes.
             </p>
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link href="/admin/dashboard">
+              <Link href="/login">
                 <Button size="lg" className="h-12 px-8 text-base rounded-xl shadow-lg shadow-primary/25">
                   Start Free Trial
                   <ArrowRight className="h-5 w-5" />

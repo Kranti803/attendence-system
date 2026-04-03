@@ -195,14 +195,17 @@ export default function AdminClassesPage() {
                         </div>
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
-                            Start Time <span className="text-destructive">*</span>
+                            Start Time{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <Input type="time" required />
                         </div>
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
                             End Time{" "}
-                            <span className="text-muted-foreground">(optional)</span>
+                            <span className="text-muted-foreground">
+                              (optional)
+                            </span>
                           </label>
                           <Input type="time" />
                         </div>
@@ -218,14 +221,18 @@ export default function AdminClassesPage() {
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
                             Room / Location{" "}
-                            <span className="text-muted-foreground">(optional)</span>
+                            <span className="text-muted-foreground">
+                              (optional)
+                            </span>
                           </label>
                           <Input placeholder="e.g. Room 201" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
                             Session Type{" "}
-                            <span className="text-muted-foreground">(optional)</span>
+                            <span className="text-muted-foreground">
+                              (optional)
+                            </span>
                           </label>
                           <div className="relative">
                             <select
@@ -264,7 +271,10 @@ export default function AdminClassesPage() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Search by class, subject, or room…" className="pl-9" />
+                <Input
+                  placeholder="Search by class, subject, or room…"
+                  className="pl-9"
+                />
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" size="default">
@@ -306,7 +316,8 @@ export default function AdminClassesPage() {
                       <div>
                         <p className="font-medium text-foreground">{c.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          <span className="font-mono">{c.subject}</span> · {c.room}
+                          <span className="font-mono">{c.subject}</span> ·{" "}
+                          {c.room}
                         </p>
                       </div>
                     </TableCell>
@@ -341,8 +352,8 @@ export default function AdminClassesPage() {
                           c.status === "Active"
                             ? "success"
                             : c.status === "Draft"
-                            ? "secondary"
-                            : "warning"
+                              ? "secondary"
+                              : "warning"
                         }
                       >
                         {c.status}
@@ -368,4 +379,3 @@ export default function AdminClassesPage() {
     </>
   );
 }
-

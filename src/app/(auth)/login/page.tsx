@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 
 export default function LoginPage() {
@@ -100,15 +99,9 @@ export default function LoginPage() {
                 Welcome back.
               </h1>
               <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-                Sign in to access your portal and continue managing attendance
+                Sign in to access your account and continue managing attendance
                 with real-time recognition and analytics.
               </p>
-
-              <div className="mt-8 flex flex-wrap gap-2">
-                <Badge variant="secondary">Admin</Badge>
-                <Badge variant="secondary">Teacher</Badge>
-                <Badge variant="secondary">Student</Badge>
-              </div>
             </div>
           </div>
 
@@ -209,31 +202,7 @@ export default function LoginPage() {
                   </Button>
                 </form>
 
-                <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">
-                    Demo navigation (UI only)
-                  </p>
-                  <p className="mt-1">Jump directly to a portal for preview:</p>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    <Link href="/admin/dashboard">
-                      <Button variant="outline" size="sm" className="w-full">
-                        Admin
-                      </Button>
-                    </Link>
-                    <Link href="/teacher/dashboard">
-                      <Button variant="outline" size="sm" className="w-full">
-                        Teacher
-                      </Button>
-                    </Link>
-                    <Link href="/student/dashboard">
-                      <Button variant="outline" size="sm" className="w-full">
-                        Student
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-
-                <p className="text-center text-sm text-muted-foreground">
+                <p className="text-center text-sm text-muted-foreground mt-8">
                   Don&apos;t have an account?{" "}
                   <Link
                     href="#"
