@@ -105,9 +105,18 @@ export interface AttendanceSessionStartPayload {
 
 export interface AttendanceSessionStartResponse {
   id: string;
-  status: string;
-  enrolled_students_count: number;
-  message: string;
+  class_session: string;
+  class_session_detail?: {
+    id: string;
+    class_name: string;
+    date: string;
+  };
+  initiated_by: string;
+  initiated_by_email?: string;
+  started_at: string;
+  ended_at: string | null;
+  marked_students: string[];
+  marked_students_count: number;
 }
 
 export interface AttendanceSessionEndResponse {

@@ -215,7 +215,7 @@ export default function TeacherAttendancePage() {
         startCamera();
         setSessionState("running");
 
-        toast.success(`Live session started! (${response.enrolled_students_count} enrolled)`);
+        toast.success("Live session started!");
 
         timerRef.current = setInterval(() => {
           setElapsedSeconds((prev) => prev + 1);
