@@ -14,7 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Avatar } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogClose,
@@ -27,68 +26,167 @@ import {
 } from "@/components/ui/dialog";
 import {
   Calendar,
+  ChevronDown,
+  Clock,
   Download,
   Filter,
+  Loader2,
   Pencil,
   Plus,
   Search,
   Trash2,
-  Users,
-  ChevronDown,
 } from "lucide-react";
+import { toast } from "sonner";
 
-const classes = [
-  {
-    id: "CLS-CS101-A",
-    name: "CS101 — Section A",
-    subject: "CS101",
-    teacher: { name: "Dr. Sarah Wilson", initials: "SW" },
-    room: "Room 201",
-    schedule: "Mon/Wed/Fri · 09:00",
-    students: 36,
-    status: "Active",
-  },
-  {
-    id: "CLS-CS401-B",
-    name: "CS401 — Section B",
-    subject: "CS401",
-    teacher: { name: "Prof. James Carter", initials: "JC" },
-    room: "Room 305",
-    schedule: "Tue/Thu · 11:00",
-    students: 28,
-    status: "Active",
-  },
-  {
-    id: "CLS-MATH201-A",
-    name: "MATH201 — Section A",
-    subject: "MATH201",
-    teacher: { name: "Prof. Robert Hill", initials: "RH" },
-    room: "Room 110",
-    schedule: "Mon/Wed · 14:00",
-    students: 24,
-    status: "Draft",
-  },
-];
+import {
+  useClassSessions,
+  useCreateClassSession,
+  useUpdateClassSession,
+  useDeleteClassSession,
+} from "@/hooks/useClassSession";
+import { useSubjects } from "@/hooks/useSubject";
+import { ClassSession } from "@/types/classSession";
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+const formatTime = (t: string) => {
+  if (!t) return "—";
+  const [h, m] = t.split(":");
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 || 12}:${m} ${ampm}`;
+};
+
+const EMPTY_FORM = {
+  class_name: "",
+  subject: "",
+  date: "",
+  start_time: "",
+  end_time: "",
+};
 
 export default function AdminClassesPage() {
+  // ── modal state ──────────────────────────────────────────────────────────
   const [open, setOpen] = React.useState(false);
-  const subjects = ["CS101", "CS201", "CS401", "MATH201", "PHY301", "ENG102"];
-  const teachers = [
-    "Dr. Sarah Wilson",
-    "Prof. James Carter",
-    "Dr. Emily Chen",
-    "Prof. Robert Hill",
-  ];
+  const [editingSession, setEditingSession] = React.useState<ClassSession | null>(null);
+
+  // ── delete confirm state ─────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = React.useState<ClassSession | null>(null);
+
+  // ── search ───────────────────────────────────────────────────────────────
+  const [search, setSearch] = React.useState("");
+
+  // ── form state ────────────────────────────────────────────────────────────
+  const [formData, setFormData] = React.useState(EMPTY_FORM);
+
+  // ── data / mutations ──────────────────────────────────────────────────────
+  const { data: sessions = [], isLoading } = useClassSessions();
+  const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
+  const { mutate: createSession, isPending: isCreating } = useCreateClassSession();
+  const { mutate: updateSession, isPending: isUpdating } = useUpdateClassSession();
+  const { mutate: deleteSession, isPending: isDeleting } = useDeleteClassSession();
+
+  const isPending = isCreating || isUpdating;
+
+  // ── helpers ───────────────────────────────────────────────────────────────
+  const resetForm = () => setFormData(EMPTY_FORM);
+
+  const openCreate = () => {
+    setEditingSession(null);
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = (session: ClassSession) => {
+    setEditingSession(session);
+    setFormData({
+      class_name: session.class_name,
+      subject: session.subject,
+      date: session.date,
+      start_time: session.start_time.slice(0, 5), // HH:MM
+      end_time: session.end_time.slice(0, 5),
+    });
+    setOpen(true);
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const payload = {
+      class_name: formData.class_name,
+      subject: formData.subject,
+      date: formData.date,
+      start_time: formData.start_time,
+      end_time: formData.end_time,
+    };
+
+    if (editingSession) {
+      updateSession(
+        { id: editingSession.id, payload },
+        {
+          onSuccess: () => {
+            setOpen(false);
+            resetForm();
+            toast.success("Class session updated successfully");
+          },
+          onError: (err) => toast.error(err.message),
+        }
+      );
+    } else {
+      createSession(payload, {
+        onSuccess: () => {
+          setOpen(false);
+          resetForm();
+          toast.success("Class session created successfully");
+        },
+        onError: (err) => toast.error(err.message),
+      });
+    }
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteSession(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        toast.success("Class session deleted successfully");
+      },
+      onError: (err) => toast.error(err.message),
+    });
+  };
+
+  // ── subject name lookup ───────────────────────────────────────────────────
+  const subjectName = (id: string) => {
+    const s = subjects.find((s) => s.id === id);
+    return s ? `${s.name} (${s.code})` : id;
+  };
+
+  // ── filtered list ─────────────────────────────────────────────────────────
+  const filtered = sessions.filter((s) => {
+    const q = search.toLowerCase();
+    return (
+      s.class_name.toLowerCase().includes(q) ||
+      subjectName(s.subject).toLowerCase().includes(q) ||
+      s.date.includes(q)
+    );
+  });
 
   return (
     <>
       <TopNavbar title="Classes" userInitials="AU" />
       <div className="p-6 space-y-6">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Classes</h1>
             <p className="text-sm text-muted-foreground">
-              Create classes, assign teachers, and manage schedules.
+              Create class sessions, assign subjects, and manage schedules.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -96,82 +194,73 @@ export default function AdminClassesPage() {
               <Download className="h-4 w-4" />
               Export
             </Button>
-            <Dialog open={open} onOpenChange={setOpen}>
+
+            {/* ── Create / Edit Dialog ───────────────────────────────────── */}
+            <Dialog
+              open={open}
+              onOpenChange={(v) => {
+                setOpen(v);
+                if (!v) resetForm();
+              }}
+            >
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button size="sm" onClick={openCreate}>
                   <Plus className="h-4 w-4" />
                   Create Class
                 </Button>
               </DialogTrigger>
+
               <DialogContent className="max-w-2xl max-h-[calc(100svh-2rem)] overflow-y-auto">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setOpen(false);
-                  }}
-                >
+                <form onSubmit={handleSubmit}>
                   <DialogHeader>
-                    <DialogTitle>Create Class (Session)</DialogTitle>
+                    <DialogTitle>
+                      {editingSession ? "Edit Class Session" : "Create Class Session"}
+                    </DialogTitle>
                     <DialogDescription>
-                      Define a specific class session where attendance will be
-                      taken.
+                      {editingSession
+                        ? "Update the session details below."
+                        : "Define a specific class session where attendance will be taken."}{" "}
+                      Fields marked <span className="font-medium text-foreground">*</span> are required.
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className="mt-5 grid gap-6">
                     {/* Core Info */}
                     <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Core Info
-                      </p>
+                      <p className="text-sm font-semibold text-foreground">Core Info</p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
                           <label className="text-sm font-medium text-foreground">
                             Class Name / Section{" "}
                             <span className="text-destructive">*</span>
                           </label>
-                          <Input placeholder='e.g. "Section A"' required />
+                          <Input
+                            name="class_name"
+                            value={formData.class_name}
+                            onChange={handleInputChange}
+                            placeholder='e.g. "CS101 — Section A"'
+                            required
+                          />
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 sm:col-span-2">
                           <label className="text-sm font-medium text-foreground">
                             Subject <span className="text-destructive">*</span>
                           </label>
                           <div className="relative">
                             <select
+                              name="subject"
+                              value={formData.subject}
+                              onChange={handleInputChange}
                               required
-                              defaultValue=""
                               className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
                             >
                               <option value="" disabled>
-                                Select subject…
+                                {isLoadingSubjects ? "Loading subjects…" : "Select subject…"}
                               </option>
                               {subjects.map((s) => (
-                                <option key={s} value={s}>
-                                  {s}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Teacher <span className="text-destructive">*</span>
-                          </label>
-                          <div className="relative">
-                            <select
-                              required
-                              defaultValue=""
-                              className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="" disabled>
-                                Select teacher…
-                              </option>
-                              {teachers.map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
+                                <option key={s.id} value={s.id}>
+                                  {s.name} ({s.code})
                                 </option>
                               ))}
                             </select>
@@ -183,82 +272,58 @@ export default function AdminClassesPage() {
 
                     {/* Schedule Info */}
                     <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Schedule Info
-                      </p>
+                      <p className="text-sm font-semibold text-foreground">Schedule</p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-3">
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
                             Date <span className="text-destructive">*</span>
                           </label>
-                          <Input type="date" required />
+                          <Input
+                            name="date"
+                            type="date"
+                            value={formData.date}
+                            onChange={handleInputChange}
+                            required
+                          />
                         </div>
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
-                            Start Time{" "}
-                            <span className="text-destructive">*</span>
+                            Start Time <span className="text-destructive">*</span>
                           </label>
-                          <Input type="time" required />
+                          <Input
+                            name="start_time"
+                            type="time"
+                            value={formData.start_time}
+                            onChange={handleInputChange}
+                            required
+                          />
                         </div>
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
-                            End Time{" "}
-                            <span className="text-muted-foreground">
-                              (optional)
-                            </span>
+                            End Time <span className="text-destructive">*</span>
                           </label>
-                          <Input type="time" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Optional (Advanced) */}
-                    <div className="rounded-2xl border border-border bg-muted/10 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Optional (Advanced)
-                      </p>
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Room / Location{" "}
-                            <span className="text-muted-foreground">
-                              (optional)
-                            </span>
-                          </label>
-                          <Input placeholder="e.g. Room 201" />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Session Type{" "}
-                            <span className="text-muted-foreground">
-                              (optional)
-                            </span>
-                          </label>
-                          <div className="relative">
-                            <select
-                              defaultValue=""
-                              className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="" disabled>
-                                Select type…
-                              </option>
-                              <option value="Lecture">Lecture</option>
-                              <option value="Lab">Lab</option>
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          </div>
+                          <Input
+                            name="end_time"
+                            type="time"
+                            value={formData.end_time}
+                            onChange={handleInputChange}
+                            required
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <DialogFooter>
+                  <DialogFooter className="mt-6">
                     <DialogClose asChild>
                       <Button type="button" variant="outline">
                         Cancel
                       </Button>
                     </DialogClose>
-                    <Button type="submit">Create Session</Button>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {editingSession ? "Save Changes" : "Create Session"}
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -266,14 +331,17 @@ export default function AdminClassesPage() {
           </div>
         </div>
 
+        {/* ── Search / Filter ──────────────────────────────────────────────── */}
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by class, subject, or room…"
+                  placeholder="Search by class name, subject, or date…"
                   className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
               <div className="flex gap-3">
@@ -281,20 +349,17 @@ export default function AdminClassesPage() {
                   <Filter className="h-4 w-4" />
                   Subject
                 </Button>
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Teacher
-                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* ── Table ─────────────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>All Classes</CardTitle>
-              <Badge variant="secondary">{classes.length} total</Badge>
+              <CardTitle>All Class Sessions</CardTitle>
+              <Badge variant="secondary">{filtered.length} total</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -302,80 +367,138 @@ export default function AdminClassesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Class</TableHead>
-                  <TableHead>Teacher</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead className="text-center">Students</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Time</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {classes.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{c.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-mono">{c.subject}</span> ·{" "}
-                          {c.room}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar fallback={c.teacher.initials} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {c.teacher.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            {c.id}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {c.schedule}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="inline-flex items-center gap-2 text-sm">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        {c.students}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          c.status === "Active"
-                            ? "success"
-                            : c.status === "Draft"
-                              ? "secondary"
-                              : "warning"
-                        }
-                      >
-                        {c.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
+                        <span className="text-muted-foreground">Loading sessions...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      <p className="text-muted-foreground">No class sessions found.</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((session) => (
+                    <TableRow key={session.id}>
+                      {/* Class name */}
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <Calendar className="h-4 w-4" />
+                          </div>
+                          <p className="font-medium text-foreground">
+                            {session.class_name}
+                          </p>
+                        </div>
+                      </TableCell>
+
+                      {/* Subject */}
+                      <TableCell>
+                        <div>
+                          <p className="text-sm text-foreground">
+                            {subjects.find((s) => s.id === session.subject)?.name ?? "—"}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {subjects.find((s) => s.id === session.subject)?.code ?? ""}
+                          </p>
+                        </div>
+                      </TableCell>
+
+                      {/* Date */}
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(session.date).toLocaleDateString("en-US", {
+                          weekday: "short",
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </TableCell>
+
+                      {/* Time */}
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatTime(session.start_time)} — {formatTime(session.end_time)}
+                        </div>
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEdit(session)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDeleteTarget(session)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Delete Confirmation Dialog ──────────────────────────────────────── */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Class Session</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTarget?.class_name}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

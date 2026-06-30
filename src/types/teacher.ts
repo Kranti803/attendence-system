@@ -6,7 +6,16 @@ export interface CreateTeacherPayload {
   employee_id: string;
   department: string;
   email: string;
-  password: string | number; // API indicates number, but string is typical; allowing both
+  password: string | number;
+}
+
+export interface UpdateTeacherPayload {
+  first_name?: string;
+  last_name?: string;
+  phone_no?: string | null;
+  address?: string | null;
+  employee_id?: string;
+  department?: string | null;
 }
 
 export interface Teacher {
@@ -14,8 +23,11 @@ export interface Teacher {
   first_name: string;
   last_name: string;
   email: string;
-  phone_no?: string;
-  department?: string;
+  phone_no?: string | null;
+  address?: string | null;
+  department?: string | null;
   employee_id?: string;
   status?: string;
+  created_at?: string;
+  updated_at?: string;
 }

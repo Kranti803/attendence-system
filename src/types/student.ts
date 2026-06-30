@@ -1,4 +1,6 @@
 export interface CreateStudentPayload {
+  email: string;
+  password?: string;
   first_name: string;
   last_name: string;
   phone_no: string;
@@ -6,12 +8,13 @@ export interface CreateStudentPayload {
   roll_number: string;
   department: string;
   year: number;
-  user: string;
-  photos: File[]; // 5 images
+  semester: number;
+  images: File[];
 }
 
 export interface Student {
   id: string;
+  email: string;
   first_name: string;
   last_name: string;
   phone_no: string;
@@ -19,5 +22,16 @@ export interface Student {
   roll_number: string;
   department: string;
   year: number;
-  user: string;
+  semester: number;
+}
+
+export interface UpdateStudentPayload {
+  first_name?: string;
+  last_name?: string;
+  phone_no?: string;
+  address?: string;
+  roll_number?: string;
+  department?: string;
+  year?: number;
+  semester?: number;
 }

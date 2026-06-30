@@ -37,79 +37,17 @@ import {
   Camera,
   Loader2,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
-import { useCreateStudent } from "@/hooks/useStudent";
-
-/* ─── Static Data ─── */
-const students = [
-  {
-    id: "STU001",
-    name: "Alice Johnson",
-    email: "alice@university.edu",
-    department: "Computer Science",
-    semester: "6th",
-    status: "Active",
-  },
-  {
-    id: "STU002",
-    name: "Bob Williams",
-    email: "bob@university.edu",
-    department: "Mathematics",
-    semester: "4th",
-    status: "Active",
-  },
-  {
-    id: "STU003",
-    name: "Charlie Brown",
-    email: "charlie@university.edu",
-    department: "Physics",
-    semester: "6th",
-    status: "Inactive",
-  },
-  {
-    id: "STU004",
-    name: "Diana Ross",
-    email: "diana@university.edu",
-    department: "Computer Science",
-    semester: "2nd",
-    status: "Active",
-  },
-  {
-    id: "STU005",
-    name: "Ethan Hunt",
-    email: "ethan@university.edu",
-    department: "Engineering",
-    semester: "8th",
-    status: "Active",
-  },
-  {
-    id: "STU006",
-    name: "Fiona Apple",
-    email: "fiona@university.edu",
-    department: "Mathematics",
-    semester: "4th",
-    status: "Active",
-  },
-  {
-    id: "STU007",
-    name: "George Lucas",
-    email: "george@university.edu",
-    department: "Physics",
-    semester: "6th",
-    status: "Suspended",
-  },
-  {
-    id: "STU008",
-    name: "Hannah Montana",
-    email: "hannah@university.edu",
-    department: "Computer Science",
-    semester: "2nd",
-    status: "Active",
-  },
-];
-
+import { useCreateStudent, useStudents, useUpdateStudent, useDeleteStudent } from "@/hooks/useStudent";
+import { Student } from "@/types/student";
+import { toast } from "sonner";
 export default function StudentManagementPage() {
   const [open, setOpen] = React.useState(false);
+  const [editingStudentId, setEditingStudentId] = React.useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Student | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
   const departments = [
     "Computer Science",
     "Mathematics",
@@ -121,12 +59,14 @@ export default function StudentManagementPage() {
   const [formData, setFormData] = React.useState({
     first_name: "",
     last_name: "",
+    email: "",
+    password: "",
     phone_no: "",
     address: "",
     roll_number: "",
     department: "",
     year: "",
-    user: "",
+    semester: "",
   });
 
   const [capturedPhotos, setCapturedPhotos] = React.useState<File[]>([]);
@@ -135,7 +75,12 @@ export default function StudentManagementPage() {
   const [isCameraOpen, setIsCameraOpen] = React.useState(false);
   const [isCapturing, setIsCapturing] = React.useState(false);
 
-  const { mutate: addStudent, isPending } = useCreateStudent();
+  const { mutate: addStudent, isPending: isCreating } = useCreateStudent();
+  const { mutate: updateStudent, isPending: isUpdating } = useUpdateStudent();
+  const { mutate: deleteStudent } = useDeleteStudent();
+  const { data: students = [], isLoading: isLoadingStudents } = useStudents();
+  
+  const isPending = isCreating || isUpdating;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -165,8 +110,8 @@ export default function StudentManagementPage() {
     setIsCameraOpen(false);
   };
 
-  const captureImages = async () => {
-    if (!videoRef.current || !isCameraOpen) return;
+  const captureImage = async () => {
+    if (!videoRef.current || !isCameraOpen || capturedPhotos.length >= 5) return;
     setIsCapturing(true);
 
     const canvas = document.createElement("canvas");
@@ -174,26 +119,54 @@ export default function StudentManagementPage() {
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext("2d");
 
-    const newPhotos: File[] = [];
-    for (let i = 0; i < 5; i++) {
-        if (ctx && videoRef.current) {
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg'));
-          if (blob) {
-            const file = new File([blob], `capture-${Date.now()}-${i}.jpg`, { type: 'image/jpeg' });
-            newPhotos.push(file);
+    if (ctx && videoRef.current) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg'));
+      if (blob) {
+        const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setCapturedPhotos((prev) => {
+          const newPhotos = [...prev, file].slice(0, 5);
+          if (newPhotos.length === 5) {
+            stopCamera();
           }
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+          return newPhotos;
+        });
+      }
     }
     
-    setCapturedPhotos((prev) => [...prev, ...newPhotos].slice(0, 5));
     setIsCapturing(false);
-    stopCamera();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingStudentId) {
+      updateStudent(
+        {
+          id: editingStudentId,
+          payload: {
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            phone_no: formData.phone_no,
+            address: formData.address,
+            roll_number: formData.roll_number,
+            department: formData.department,
+            year: parseInt(formData.year, 10),
+            semester: parseInt(formData.semester, 10),
+          },
+        },
+        {
+          onSuccess: () => {
+            setOpen(false);
+            resetForm();
+            toast.success("Student updated successfully");
+          },
+          onError: (err) => toast.error(err.message),
+        }
+      );
+      return;
+    }
+
     if (capturedPhotos.length !== 5) {
       alert("Please capture or upload exactly 5 images.");
       return;
@@ -203,30 +176,74 @@ export default function StudentManagementPage() {
       {
         ...formData,
         year: parseInt(formData.year, 10),
-        photos: capturedPhotos,
+        semester: parseInt(formData.semester, 10),
+        images: capturedPhotos,
       },
       {
         onSuccess: () => {
           setOpen(false);
-          setFormData({
-            first_name: "",
-            last_name: "",
-            phone_no: "",
-            address: "",
-            roll_number: "",
-            department: "",
-            year: "",
-            user: "",
-          });
-          setCapturedPhotos([]);
-          stopCamera();
+          resetForm();
+          toast.success("Student created successfully");
         },
+        onError: (err) => toast.error(err.message),
       }
     );
   };
 
+  const resetForm = () => {
+    setFormData({
+      first_name: "",
+      last_name: "",
+      email: "",
+      password: "",
+      phone_no: "",
+      address: "",
+      roll_number: "",
+      department: "",
+      year: "",
+      semester: "",
+    });
+    setCapturedPhotos([]);
+    setEditingStudentId(null);
+    stopCamera();
+  };
+
+  const handleEdit = (student: any) => {
+    setFormData({
+      first_name: student.first_name || "",
+      last_name: student.last_name || "",
+      email: student.email || "",
+      password: "", // do not populate password
+      phone_no: student.phone_no || "",
+      address: student.address || "",
+      roll_number: student.roll_number || "",
+      department: student.department || "",
+      year: student.year?.toString() || "",
+      semester: student.semester?.toString() || "",
+    });
+    setEditingStudentId(student.id);
+    setOpen(true);
+  };
+
+  const handleDelete = (student: Student) => {
+    setDeleteTarget(student);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteStudent(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        toast.success("Student deleted successfully");
+      },
+      onError: (err) => toast.error(err.message),
+    });
+  };
+
   React.useEffect(() => {
-    if (!open) stopCamera();
+    if (!open) {
+      resetForm();
+    }
   }, [open]);
 
   return (
@@ -258,12 +275,11 @@ export default function StudentManagementPage() {
                   onSubmit={handleSubmit}
                 >
                   <DialogHeader>
-                    <DialogTitle>Add Student</DialogTitle>
+                    <DialogTitle>{editingStudentId ? "Edit Student" : "Add Student"}</DialogTitle>
                     <DialogDescription>
-                      Register a student and collect face images for
-                      recognition. Upload at least{" "}
-                      <span className="font-medium text-foreground">3–5</span>{" "}
-                      images.
+                      {editingStudentId
+                        ? "Update student details."
+                        : "Register a student and collect face images for recognition. Upload at least 3–5 images."}
                     </DialogDescription>
                   </DialogHeader>
 
@@ -311,10 +327,38 @@ export default function StudentManagementPage() {
 
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">
-                            User ID <span className="text-destructive">*</span>
+                            Email <span className="text-destructive">*</span>
                           </label>
-                          <Input name="user" value={formData.user} onChange={handleInputChange} placeholder="UUID" required />
+                          <Input name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="alice@university.edu" required disabled={!!editingStudentId} />
                         </div>
+
+                        {!editingStudentId && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-foreground">
+                              Password <span className="text-destructive">*</span>
+                            </label>
+                            <div className="relative">
+                              <Input 
+                                name="password" 
+                                type={showPassword ? "text" : "password"} 
+                                value={formData.password} 
+                                onChange={handleInputChange} 
+                                placeholder="Min 8 chars, uppercase, digit, special" 
+                                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}"
+                                title="Password must be at least 8 characters with uppercase, lowercase, digit, and special character (@$!%*?&)"
+                                required={!editingStudentId} 
+                                className="pr-10"
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                onClick={() => setShowPassword(!showPassword)}
+                              >
+                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -351,113 +395,136 @@ export default function StudentManagementPage() {
                           </label>
                           <Input name="year" type="number" value={formData.year} onChange={handleInputChange} placeholder="e.g. 2026" required />
                         </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">
+                            Semester <span className="text-destructive">*</span>
+                          </label>
+                          <div className="relative">
+                            <select
+                              name="semester"
+                              value={formData.semester}
+                              onChange={handleInputChange}
+                              required
+                              className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="" disabled>Select semester…</option>
+                              {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                                <option key={s} value={s}>{s}{s === 1 ? 'st' : s === 2 ? 'nd' : s === 3 ? 'rd' : 'th'} Semester</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Face Recognition Data */}
-                    <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Face Recognition Data{" "}
-                        <span className="text-destructive">(required)</span>
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Provide at least 3–5 clear images with different angles
-                        and lighting.
-                      </p>
+                    {!editingStudentId && (
+                      <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                        <p className="text-sm font-semibold text-foreground">
+                          Face Recognition Data{" "}
+                          <span className="text-destructive">(required)</span>
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Provide at least 3–5 clear images with different angles
+                          and lighting.
+                        </p>
 
-                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                        {/* Upload */}
-                        <div className="rounded-2xl border border-border bg-background p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                Upload Images
-                              </p>
+                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                          {/* Upload */}
+                          <div className="rounded-2xl border border-border bg-background p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  Upload Images
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Multiple images supported (JPG/PNG).
+                                </p>
+                              </div>
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <ImagePlus className="h-5 w-5" />
+                              </div>
+                            </div>
+
+                            <div className="mt-4 space-y-2">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => {
+                                  if (e.target.files) {
+                                    const filesArray = Array.from(e.target.files);
+                                    setCapturedPhotos((prev) => [...prev, ...filesArray].slice(0, 5));
+                                  }
+                                }}
+                              />
                               <p className="text-xs text-muted-foreground">
-                                Multiple images supported (JPG/PNG).
+                                {capturedPhotos.length}/5 images selected.
                               </p>
-                            </div>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <ImagePlus className="h-5 w-5" />
                             </div>
                           </div>
 
-                          <div className="mt-4 space-y-2">
-                            <Input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              onChange={(e) => {
-                                if (e.target.files) {
-                                  const filesArray = Array.from(e.target.files);
-                                  setCapturedPhotos((prev) => [...prev, ...filesArray].slice(0, 5));
-                                }
-                              }}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              {capturedPhotos.length}/5 images selected.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Camera Capture (UI placeholder) */}
-                        <div className="rounded-2xl border border-border bg-background p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                Camera Capture
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Capture multiple frames (UI only).
-                              </p>
+                          {/* Camera Capture (UI placeholder) */}
+                          <div className="rounded-2xl border border-border bg-background p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  Camera Capture
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Capture multiple frames (UI only).
+                                </p>
+                              </div>
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <Camera className="h-5 w-5" />
+                              </div>
                             </div>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <Camera className="h-5 w-5" />
-                            </div>
-                          </div>
 
-                          <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
-                            <div className="relative aspect-video w-full rounded-lg bg-black overflow-hidden">
-                              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                              {isCapturing && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
-                                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
+                              <div className="relative aspect-video w-full rounded-lg bg-black overflow-hidden">
+                                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                                {isCapturing && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {!isCameraOpen ? (
+                                  <Button type="button" variant="outline" size="sm" onClick={startCamera}>
+                                    Start Camera
+                                  </Button>
+                                ) : (
+                                  <Button type="button" variant="outline" size="sm" onClick={stopCamera}>
+                                    Stop Camera
+                                  </Button>
+                                )}
+                                <Button type="button" size="sm" onClick={captureImage} disabled={!isCameraOpen || isCapturing || capturedPhotos.length >= 5}>
+                                  Capture Image ({capturedPhotos.length}/5)
+                                </Button>
+                              </div>
+                              {capturedPhotos.length > 0 && (
+                                <div className="mt-4 flex gap-2 overflow-x-auto">
+                                  {capturedPhotos.map((photo, i) => (
+                                    <div key={i} className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden">
+                                      <img src={URL.createObjectURL(photo)} alt={`Capture ${i}`} className="h-full w-full object-cover" />
+                                      <button type="button" onClick={() => setCapturedPhotos(capturedPhotos.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-destructive/80 p-0.5 rounded-bl-md z-20">
+                                        <X className="h-3 w-3 text-white" />
+                                      </button>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Capture exactly 5 frames before saving. (Currently {capturedPhotos.length}/5)
+                              </p>
                             </div>
-                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                              {!isCameraOpen ? (
-                                <Button type="button" variant="outline" size="sm" onClick={startCamera}>
-                                  Start Camera
-                                </Button>
-                              ) : (
-                                <Button type="button" variant="outline" size="sm" onClick={stopCamera}>
-                                  Stop Camera
-                                </Button>
-                              )}
-                              <Button type="button" size="sm" onClick={captureImages} disabled={!isCameraOpen || isCapturing}>
-                                Capture 5 Frames
-                              </Button>
-                            </div>
-                            {capturedPhotos.length > 0 && (
-                              <div className="mt-4 flex gap-2 overflow-x-auto">
-                                {capturedPhotos.map((photo, i) => (
-                                  <div key={i} className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden">
-                                    <img src={URL.createObjectURL(photo)} alt={`Capture ${i}`} className="h-full w-full object-cover" />
-                                    <button type="button" onClick={() => setCapturedPhotos(capturedPhotos.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-destructive/80 p-0.5 rounded-bl-md z-20">
-                                      <X className="h-3 w-3 text-white" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Capture exactly 5 frames before saving.
-                            </p>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <DialogFooter>
@@ -468,7 +535,7 @@ export default function StudentManagementPage() {
                     </DialogClose>
                     <Button type="submit" disabled={isPending}>
                       {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Create Student
+                      {editingStudentId ? "Update Student" : "Create Student"}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -515,72 +582,89 @@ export default function StudentManagementPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Roll No.</TableHead>
                   <TableHead>Department</TableHead>
+                  <TableHead>Year</TableHead>
                   <TableHead>Semester</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          fallback={student.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                          size="sm"
-                        />
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {student.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {student.email}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {student.id}
-                    </TableCell>
-                    <TableCell>{student.department}</TableCell>
-                    <TableCell>{student.semester}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          student.status === "Active"
-                            ? "success"
-                            : student.status === "Inactive"
-                              ? "warning"
-                              : "destructive"
-                        }
-                      >
-                        {student.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
+                {isLoadingStudents ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
+                        <span className="text-muted-foreground">Loading students...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : students.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      <p className="text-muted-foreground">No students found.</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  students.map((student) => {
+                    const name = `${student.first_name} ${student.last_name}`;
+                    return (
+                      <TableRow key={student.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              fallback={name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                              size="sm"
+                            />
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {student.email}
+                              </p>
+                              {student.phone_no && (
+                                <p className="text-xs text-muted-foreground">
+                                  {student.phone_no}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {student.roll_number || student.id}
+                        </TableCell>
+                        <TableCell>{student.department}</TableCell>
+                        <TableCell>{student.year ?? "—"}</TableCell>
+                        <TableCell>{student.semester}</TableCell>
+                        <TableCell>
+                          <Badge variant="success">Active</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(student)}>
+                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(student)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
 
             {/* Pagination */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing 1-8 of 1,234 students
+                Showing {students.length} students
               </p>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" disabled>
@@ -607,6 +691,28 @@ export default function StudentManagementPage() {
           </CardContent>
         </Card>
       </div>
+      {/* ── Delete Confirmation Dialog ────────────────────────────────────── */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Student</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTarget?.first_name} {deleteTarget?.last_name}
+              </span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

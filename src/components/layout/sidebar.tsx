@@ -20,6 +20,7 @@ import {
   Bell,
   CreditCard,
   LogOut,
+  BookUser,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -69,6 +70,7 @@ const configs: Record<string, SidebarConfig> = {
       { label: "Students", href: "/admin/students", icon: Users },
       { label: "Teachers", href: "/admin/teachers", icon: GraduationCap },
       { label: "Subjects", href: "/admin/subjects", icon: BookOpen },
+      { label: "Enrollments", href: "/admin/enrollments", icon: BookUser },
       { label: "Classes", href: "/admin/classes", icon: Users },
       { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
       { label: "Reports", href: "/admin/reports", icon: FileText },

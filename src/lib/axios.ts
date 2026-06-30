@@ -4,9 +4,9 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://attendance-backend-
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // headers: {
+  //   'Content-Type': 'application/json',
+  // },
 });
 
 // Helper functions for token management
