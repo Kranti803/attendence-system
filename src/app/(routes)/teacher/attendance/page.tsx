@@ -207,7 +207,7 @@ export default function TeacherAttendancePage() {
     // Start the attendance session via API
     startSession(selectedSessionId, {
       onSuccess: (response) => {
-        setLiveSessionId(response.session_id);
+        setLiveSessionId(response.id);
         setLiveDetectedStudents([]);
         setSessionSummaryData(null);
         setRecognizedResults([]);

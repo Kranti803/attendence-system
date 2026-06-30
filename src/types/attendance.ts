@@ -104,7 +104,7 @@ export interface AttendanceSessionStartPayload {
 }
 
 export interface AttendanceSessionStartResponse {
-  session_id: string;
+  id: string;
   status: string;
   enrolled_students_count: number;
   message: string;
