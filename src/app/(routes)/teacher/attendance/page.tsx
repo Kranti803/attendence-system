@@ -48,7 +48,7 @@ import {
   useEndAttendanceSession,
 } from "@/hooks/useAttendance";
 import { useAttendanceStream, useAttendanceCameraStream } from "@/hooks/useAttendanceStream";
-import { AttendanceMarkResponse, DetectedStudent, AttendanceSessionEndResponse } from "@/types/attendance";
+import { AttendanceMarkResponse, DetectedStudent, AttendanceSessionEndResponse, FaceOverlay } from "@/types/attendance";
 
 const EMPTY_SESSION_FORM = {
   class_name: "",
@@ -76,6 +76,7 @@ export default function TeacherAttendancePage() {
 
   // ── Camera ────────────────────────────────────────────────────────────────
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = React.useState(false);
 
@@ -114,6 +115,7 @@ export default function TeacherAttendancePage() {
     isConnected,
     isConnecting,
     sendFrame,
+    faces: wsFaces,
     detectedStudents: wsDetectedStudents,
     error: wsError,
   } = useAttendanceStream({
@@ -138,6 +140,89 @@ export default function TeacherAttendancePage() {
 
   // Continuous frame capture
   useAttendanceCameraStream(videoRef, isCameraActive && sessionState === "running" && !!liveSessionId, sendFrame, 150);
+
+  // ── Canvas face-overlay drawing ───────────────────────────────────────────
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Sync canvas logical size to the video's displayed size
+    const syncSize = () => {
+      const { width, height } = video.getBoundingClientRect();
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    };
+
+    // Clear when camera is off or no faces
+    if (!isCameraActive || wsFaces.length === 0) {
+      syncSize();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    syncSize();
+
+    // Video stream size vs canvas size ratio (frames are sent at 640×480)
+    const streamW = 640;
+    const streamH = 480;
+    const scaleX = canvas.width / streamW;
+    const scaleY = canvas.height / streamH;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    wsFaces.forEach((face: FaceOverlay) => {
+      const x = face.x * scaleX;
+      const y = face.y * scaleY;
+      const w = face.w * scaleX;
+      const h = face.h * scaleY;
+
+      // Choose colour
+      const color =
+        face.status === "identified"
+          ? "#22c55e"   // green-500
+          : face.status === "ambiguous"
+          ? "#eab308"   // yellow-500
+          : "#ef4444";  // red-500
+
+      // Box
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x, y, w, h);
+      ctx.shadowBlur = 0;
+
+      // Semi-transparent fill for subtle depth
+      ctx.fillStyle = color + "22";
+      ctx.fillRect(x, y, w, h);
+
+      // Label background + text
+      const label =
+        face.status === "identified" && face.student_id
+          ? face.student_id.slice(0, 8)
+          : face.status === "ambiguous"
+          ? "Ambiguous"
+          : "Unknown";
+
+      const fontSize = Math.max(11, Math.round(w * 0.12));
+      ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+      const textW = ctx.measureText(label).width;
+      const labelH = fontSize + 6;
+      const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
+
+      ctx.fillStyle = color;
+      ctx.fillRect(x, labelY, textW + 12, labelH);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, x + 6, labelY + fontSize);
+    });
+  }, [wsFaces, isCameraActive]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const subjectName = (id: string) => {
@@ -672,6 +757,12 @@ export default function TeacherAttendancePage() {
                   playsInline
                   muted
                   className="absolute inset-0 h-full w-full object-cover"
+                />
+                {/* Face detection canvas overlay */}
+                <canvas
+                  ref={canvasRef}
+                  className="absolute inset-0 h-full w-full"
+                  style={{ pointerEvents: "none" }}
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-size-[100%_4px]" />
 

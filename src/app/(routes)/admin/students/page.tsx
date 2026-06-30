@@ -115,13 +115,15 @@ export default function StudentManagementPage() {
     setIsCapturing(true);
 
     const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+    canvas.width = 640;
+    canvas.height = 480;
     const ctx = canvas.getContext("2d");
 
     if (ctx && videoRef.current) {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg'));
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.7)
+      );
       if (blob) {
         const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
         setCapturedPhotos((prev) => {

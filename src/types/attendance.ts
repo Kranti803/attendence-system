@@ -140,6 +140,18 @@ export interface DetectedStudent {
   confidence: number;
 }
 
+// ── Face Overlay (bounding boxes from WebSocket) ────────────────────────────
+
+export interface FaceOverlay {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  status: 'identified' | 'unknown' | 'ambiguous';
+  student_id: string | null;
+  confidence: number;
+}
+
 // WebSocket message types
 export interface WSFrameMessage {
   type: 'frame';
@@ -157,6 +169,11 @@ export interface WSFrameProcessedMessage {
     distance: number;
     marked_at: string;
   }[];
+  /** Per-face bounding boxes with detection status */
+  faces: FaceOverlay[];
+  ml_status?: string;
+  total_faces_detected?: number;
+  nearest_distance?: number | null;
   timestamp: string;
 }
 

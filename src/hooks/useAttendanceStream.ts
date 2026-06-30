@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { getWebSocketUrl } from '@/services/attendance.service';
-import { DetectedStudent, WSMessage } from '@/types/attendance';
+import { DetectedStudent, WSMessage, FaceOverlay } from '@/types/attendance';
 
 interface UseAttendanceStreamOptions {
   sessionId: string | null;
@@ -15,6 +15,7 @@ interface UseAttendanceStreamReturn {
   isConnecting: boolean;
   sendFrame: (frameData: string) => void;
   detectedStudents: DetectedStudent[];
+  faces: FaceOverlay[];
   error: string | null;
 }
 
@@ -33,6 +34,7 @@ export const useAttendanceStream = ({
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectedStudents, setDetectedStudents] = useState<DetectedStudent[]>([]);
+  const [faces, setFaces] = useState<FaceOverlay[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +75,9 @@ export const useAttendanceStream = ({
 
         switch (message.type) {
           case 'frame_processed': {
+            // Update face bounding boxes on every frame (replaces, not accumulates)
+            setFaces(message.faces ?? []);
+
             const raw = message.newly_detected || [];
             if (raw.length > 0) {
               const mapped: DetectedStudent[] = raw.map((d) => ({
@@ -168,6 +173,7 @@ export const useAttendanceStream = ({
     isConnecting,
     sendFrame,
     detectedStudents,
+    faces,
     error,
   };
 };
