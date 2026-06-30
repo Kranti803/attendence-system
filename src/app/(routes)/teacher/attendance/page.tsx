@@ -2,7 +2,7 @@
 
 import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,12 +25,10 @@ import {
   XCircle,
   RotateCcw,
   Users,
-  Pause,
   Timer,
   ChevronDown,
   ShieldAlert,
   Loader2,
-  AlertCircle,
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,14 +39,13 @@ import {
 } from "@/hooks/useClassSession";
 import { useSubjects } from "@/hooks/useSubject";
 import {
-  useMarkAttendance,
   useSessionSummary,
   useClassAttendance,
   useStartAttendanceSession,
   useEndAttendanceSession,
 } from "@/hooks/useAttendance";
 import { useAttendanceStream, useAttendanceCameraStream } from "@/hooks/useAttendanceStream";
-import { AttendanceMarkResponse, DetectedStudent, AttendanceSessionEndResponse, FaceOverlay } from "@/types/attendance";
+import { DetectedStudent, AttendanceSessionEndResponse, FaceOverlay } from "@/types/attendance";
 
 const EMPTY_SESSION_FORM = {
   class_name: "",
@@ -61,9 +58,7 @@ const EMPTY_SESSION_FORM = {
 export default function TeacherAttendancePage() {
   // ── Session selection ─────────────────────────────────────────────────────
   const [selectedSessionId, setSelectedSessionId] = React.useState("");
-  const [sessionState, setSessionState] = React.useState<
-    "idle" | "running" | "paused" | "ended"
-  >("idle");
+  const [sessionState, setSessionState] = React.useState<"idle" | "running" | "ended">("idle");
 
   // ── Live attendance session ───────────────────────────────────────────────
   const [liveSessionId, setLiveSessionId] = React.useState<string | null>(null);
@@ -79,24 +74,18 @@ export default function TeacherAttendancePage() {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = React.useState(false);
-
-  // ── Live recognition results (accumulated during session) ─────────────────
-  const [recognizedResults, setRecognizedResults] = React.useState<
-    AttendanceMarkResponse[]
-  >([]);
+  const facesRef = React.useRef<FaceOverlay[]>([]);
 
   // ── Elapsed timer ─────────────────────────────────────────────────────────
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Data hooks ────────────────────────────────────────────────────────────
-  const { data: classSessions = [], isLoading: isLoadingSessions } =
-    useClassSessions();
+  const { data: classSessions = [], isLoading: isLoadingSessions } = useClassSessions();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
-  const { mutate: createClassSession, isPending: isCreatingSession } =
-    useCreateClassSession();
+  const { mutate: createClassSession, isPending: isCreatingSession } = useCreateClassSession();
 
-  const isSessionLive = sessionState === "running" || sessionState === "paused";
+  const isSessionLive = sessionState === "running";
 
   const { data: sessionSummary } = useSessionSummary(
     selectedSessionId || null,
@@ -106,7 +95,6 @@ export default function TeacherAttendancePage() {
   const { data: classAttendance = [], isLoading: isLoadingAttendance } =
     useClassAttendance(selectedSessionId || null);
 
-  const { mutate: markAttendance, isPending: isMarking } = useMarkAttendance();
   const { mutate: startSession, isPending: isStartingSession } = useStartAttendanceSession();
   const { mutate: endSession, isPending: isEndingSession } = useEndAttendanceSession();
 
@@ -116,7 +104,6 @@ export default function TeacherAttendancePage() {
     isConnecting,
     sendFrame,
     faces: wsFaces,
-    detectedStudents: wsDetectedStudents,
     error: wsError,
   } = useAttendanceStream({
     sessionId: liveSessionId,
@@ -124,7 +111,7 @@ export default function TeacherAttendancePage() {
       setLiveDetectedStudents((prev) => {
         const newIds = new Set(students.map((s) => s.student_id));
         const filtered = prev.filter((p) => !newIds.has(p.student_id));
-        return [...filtered, ...students];
+        return [...students, ...filtered]; // Prepend newest first
       });
       students.forEach((s) => {
         toast.success(`${s.student_name} detected! (${(s.confidence * 100).toFixed(0)}%)`);
@@ -138,10 +125,15 @@ export default function TeacherAttendancePage() {
     },
   });
 
-  // Continuous frame capture
-  useAttendanceCameraStream(videoRef, isCameraActive && sessionState === "running" && !!liveSessionId, sendFrame, 150);
+  // Keep facesRef in sync so the rAF loop always reads the latest data
+  React.useEffect(() => {
+    facesRef.current = wsFaces;
+  }, [wsFaces]);
 
-  // ── Canvas face-overlay drawing ───────────────────────────────────────────
+  // Continuous frame capture — send at 300ms intervals
+  useAttendanceCameraStream(videoRef, isCameraActive && sessionState === "running" && !!liveSessionId, sendFrame, 300);
+
+  // ── rAF canvas draw loop — runs at monitor refresh rate for smooth boxes ──
   React.useEffect(() => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -150,79 +142,78 @@ export default function TeacherAttendancePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Sync canvas logical size to the video's displayed size
-    const syncSize = () => {
+    let animId: number;
+
+    const draw = () => {
+      animId = requestAnimationFrame(draw);
+
+      const faces = facesRef.current;
+
+      // Sync canvas logical size to the video's displayed size
       const { width, height } = video.getBoundingClientRect();
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
       }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!isCameraActive || faces.length === 0) return;
+
+      // Video stream size vs canvas size ratio (frames are sent at 480×360)
+      const scaleX = canvas.width / 480;
+      const scaleY = canvas.height / 360;
+
+      faces.forEach((face: FaceOverlay) => {
+        const x = face.x * scaleX;
+        const y = face.y * scaleY;
+        const w = face.w * scaleX;
+        const h = face.h * scaleY;
+
+        const color =
+          face.status === "identified"
+            ? "#22c55e" // Emerald 500
+            : face.status === "ambiguous"
+            ? "#eab308" // Yellow 500
+            : "#ef4444"; // Red 500
+
+        // Glowing box
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.strokeRect(x, y, w, h);
+        ctx.shadowBlur = 0;
+
+        // Translucent fill
+        ctx.fillStyle = color + "15"; // Very light fill
+        ctx.fillRect(x, y, w, h);
+
+        // Label
+        const label =
+          face.status === "identified" && face.student_id
+            ? "IDENTIFIED"
+            : face.status === "ambiguous"
+            ? "AMBIGUOUS"
+            : "UNKNOWN";
+
+        const fontSize = Math.max(10, Math.round(w * 0.1));
+        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        const textW = ctx.measureText(label).width;
+        const labelH = fontSize + 6;
+        const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
+
+        ctx.fillStyle = color;
+        ctx.fillRect(x, labelY, textW + 12, labelH);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, x + 6, labelY + fontSize - 1);
+      });
     };
 
-    // Clear when camera is off or no faces
-    if (!isCameraActive || wsFaces.length === 0) {
-      syncSize();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
-
-    syncSize();
-
-    // Video stream size vs canvas size ratio (frames are sent at 640×480)
-    const streamW = 640;
-    const streamH = 480;
-    const scaleX = canvas.width / streamW;
-    const scaleY = canvas.height / streamH;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    wsFaces.forEach((face: FaceOverlay) => {
-      const x = face.x * scaleX;
-      const y = face.y * scaleY;
-      const w = face.w * scaleX;
-      const h = face.h * scaleY;
-
-      // Choose colour
-      const color =
-        face.status === "identified"
-          ? "#22c55e"   // green-500
-          : face.status === "ambiguous"
-          ? "#eab308"   // yellow-500
-          : "#ef4444";  // red-500
-
-      // Box
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.strokeRect(x, y, w, h);
-      ctx.shadowBlur = 0;
-
-      // Semi-transparent fill for subtle depth
-      ctx.fillStyle = color + "22";
-      ctx.fillRect(x, y, w, h);
-
-      // Label background + text
-      const label =
-        face.status === "identified" && face.student_id
-          ? face.student_id.slice(0, 8)
-          : face.status === "ambiguous"
-          ? "Ambiguous"
-          : "Unknown";
-
-      const fontSize = Math.max(11, Math.round(w * 0.12));
-      ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-      const textW = ctx.measureText(label).width;
-      const labelH = fontSize + 6;
-      const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
-
-      ctx.fillStyle = color;
-      ctx.fillRect(x, labelY, textW + 12, labelH);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, x + 6, labelY + fontSize);
-    });
-  }, [wsFaces, isCameraActive]);
+    draw();
+    return () => cancelAnimationFrame(animId);
+  }, [isCameraActive]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const subjectName = (id: string) => {
@@ -240,19 +231,14 @@ export default function TeacherAttendancePage() {
     return `${m}:${s}`;
   };
 
-  // ── Stats from summary or accumulated results ────────────────────────────
+  // ── Dynamic Stats ────────────────────────────────────────────────────────
   const total = sessionSummary?.total_students ?? sessionSummaryData?.total_students ?? 0;
   const present =
-    sessionSummary?.present ??
-    sessionSummaryData?.present ??
-    liveDetectedStudents.length;
-  const absent = sessionSummary?.absent ?? sessionSummaryData?.absent ?? 0;
-  const attendanceRate = sessionSummary?.attendance_rate ?? sessionSummaryData?.attendance_rate ?? 0;
-
-  const lowConfidence = recognizedResults.filter(
-    (r) => r.face_matched && r.confidence < 0.95,
-  ).length;
-  const unknownFaces = recognizedResults.filter((r) => !r.face_matched).length;
+    sessionState === "running"
+      ? liveDetectedStudents.length
+      : (sessionSummary?.present ?? sessionSummaryData?.present ?? 0);
+  const absent = sessionState === "running" ? total - present : (sessionSummary?.absent ?? sessionSummaryData?.absent ?? 0);
+  const attendanceRate = total > 0 ? (present / total) * 100 : 0;
 
   // ── Camera controls ───────────────────────────────────────────────────────
   const startCamera = async () => {
@@ -289,13 +275,11 @@ export default function TeacherAttendancePage() {
       return;
     }
 
-    // Start the attendance session via API
     startSession(selectedSessionId, {
       onSuccess: (response) => {
         setLiveSessionId(response.id);
         setLiveDetectedStudents([]);
         setSessionSummaryData(null);
-        setRecognizedResults([]);
         setElapsedSeconds(0);
         startCamera();
         setSessionState("running");
@@ -312,18 +296,6 @@ export default function TeacherAttendancePage() {
     });
   };
 
-  const handlePauseSession = () => {
-    setSessionState("paused");
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
-  const handleResumeSession = () => {
-    setSessionState("running");
-    timerRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
-  };
-
   const handleEndSession = () => {
     if (!liveSessionId) {
       setSessionState("ended");
@@ -333,7 +305,6 @@ export default function TeacherAttendancePage() {
       return;
     }
 
-    // End the session via API (auto-marks absentees)
     endSession(liveSessionId, {
       onSuccess: (response) => {
         setSessionSummaryData(response.summary);
@@ -357,13 +328,12 @@ export default function TeacherAttendancePage() {
     setLiveSessionId(null);
     setLiveDetectedStudents([]);
     setSessionSummaryData(null);
-    setRecognizedResults([]);
     setElapsedSeconds(0);
     stopCamera();
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  // ── Cleanup on unmount ────────────────────────────────────────────────────
+  // Cleanup on unmount
   React.useEffect(() => {
     return () => {
       stopCamera();
@@ -391,15 +361,13 @@ export default function TeacherAttendancePage() {
     setSessionForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // ── Session badge ─────────────────────────────────────────────────────────
+  // ── UI Badges ──────────────────────────────────────────────────────────────
   const sessionBadge =
     sessionState === "running"
-      ? { variant: "success" as const, label: "Running" }
-      : sessionState === "paused"
-        ? { variant: "warning" as const, label: "Paused" }
-        : sessionState === "ended"
-          ? { variant: "secondary" as const, label: "Ended" }
-          : { variant: "secondary" as const, label: "Idle" };
+      ? { variant: "success" as const, label: "Live", dot: true }
+      : sessionState === "ended"
+        ? { variant: "secondary" as const, label: "Ended", dot: false }
+        : { variant: "outline" as const, label: "Ready", dot: false };
 
   return (
     <>
@@ -409,35 +377,36 @@ export default function TeacherAttendancePage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-foreground">
-                Take Attendance
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                Command Center
               </h1>
-              <Badge variant={sessionBadge.variant} className="h-6">
+              <Badge variant={sessionBadge.variant} className="h-6 gap-1.5 px-2.5">
+                {sessionBadge.dot && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                )}
                 {sessionBadge.label}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Select a class session, then start a session to begin live face
-              recognition.
+            <p className="text-muted-foreground mt-1">
+              Select a class session and start the live feed to capture attendance.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              <RotateCcw className="h-4 w-4" />
-              Reset
+            <Button variant="outline" onClick={handleReset}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset View
             </Button>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={sessionState !== "idle"}
-                >
-                  <Plus className="h-4 w-4" />
+                <Button disabled={sessionState !== "idle"}>
+                  <Plus className="h-4 w-4 mr-2" />
                   New Session
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-md">
                 <form onSubmit={handleCreateSession}>
                   <DialogHeader>
                     <DialogTitle>Quick Create Session</DialogTitle>
@@ -448,8 +417,7 @@ export default function TeacherAttendancePage() {
                   <div className="mt-4 grid gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">
-                        Class Name / Section{" "}
-                        <span className="text-destructive">*</span>
+                        Class Name / Section <span className="text-destructive">*</span>
                       </label>
                       <Input
                         name="class_name"
@@ -483,7 +451,7 @@ export default function TeacherAttendancePage() {
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       </div>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">
                           Date <span className="text-destructive">*</span>
@@ -498,40 +466,33 @@ export default function TeacherAttendancePage() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">
-                          Start <span className="text-destructive">*</span>
+                          Time Window <span className="text-destructive">*</span>
                         </label>
-                        <Input
-                          name="start_time"
-                          type="time"
-                          value={sessionForm.start_time}
-                          onChange={handleSessionFormChange}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">
-                          End <span className="text-destructive">*</span>
-                        </label>
-                        <Input
-                          name="end_time"
-                          type="time"
-                          value={sessionForm.end_time}
-                          onChange={handleSessionFormChange}
-                          required
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            name="start_time"
+                            type="time"
+                            value={sessionForm.start_time}
+                            onChange={handleSessionFormChange}
+                            required
+                          />
+                          <Input
+                            name="end_time"
+                            type="time"
+                            value={sessionForm.end_time}
+                            onChange={handleSessionFormChange}
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                   <DialogFooter className="mt-6">
                     <DialogClose asChild>
-                      <Button type="button" variant="outline">
-                        Cancel
-                      </Button>
+                      <Button type="button" variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button type="submit" disabled={isCreatingSession}>
-                      {isCreatingSession && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
+                      {isCreatingSession && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Create & Select
                     </Button>
                   </DialogFooter>
@@ -541,216 +502,96 @@ export default function TeacherAttendancePage() {
           </div>
         </div>
 
-        {/* ── Step 1: Select Class Session ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              1) Select class session and start
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="relative">
+        {/* ── Active Session Selector ── */}
+        {sessionState === "idle" && (
+          <Card className="border-primary/20 bg-primary/5 shadow-sm">
+            <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-4">
+              <div className="flex-1 w-full relative">
                 <select
                   value={selectedSessionId}
                   onChange={(e) => setSelectedSessionId(e.target.value)}
-                  disabled={sessionState !== "idle"}
-                  className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-4 pr-10 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
                   <option value="" disabled>
                     {isLoadingSessions
                       ? "Loading sessions…"
                       : classSessions.length === 0
-                        ? "No sessions — create one from the header"
-                        : "Select a class session…"}
+                        ? "No sessions — please create one"
+                        : "Select a class session to begin…"}
                   </option>
                   {classSessions.map((session) => (
                     <option key={session.id} value={session.id}>
-                      {session.class_name} · {subjectName(session.subject)} ·{" "}
-                      {session.date} · {session.start_time?.slice(0, 5)} –{" "}
-                      {session.end_time?.slice(0, 5)}
+                      {session.class_name} · {subjectName(session.subject)} · {session.date}
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               </div>
-
-              <div className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Session
-                </span>
-                <div className="flex gap-3">
-                  <Button
-                    className="flex-1"
-                    disabled={sessionState === "running" || !selectedSessionId}
-                    onClick={
-                      sessionState === "paused"
-                        ? handleResumeSession
-                        : handleStartSession
-                    }
-                  >
-                    <Play className="h-4 w-4" />
-                    {sessionState === "paused" ? "Resume" : "Start"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    disabled={sessionState !== "running"}
-                    onClick={handlePauseSession}
-                  >
-                    <Pause className="h-4 w-4" />
-                    Pause
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <Timer className="h-3.5 w-3.5" />
-                Session time: {formatElapsed(elapsedSeconds)}
-              </span>
-              {sessionState === "idle" && (
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  Camera permissions required on first run
-                </span>
-              )}
-              {selectedSession && (
-                <span className="inline-flex items-center gap-1.5 font-mono">
-                  {selectedSession.class_name} · {selectedSession.date}
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Session Stats ── */}
-        <div className="grid gap-4 sm:grid-cols-4">
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-bold">{total}</p>
-              </div>
+              <Button
+                size="lg"
+                className="w-full sm:w-auto"
+                disabled={!selectedSessionId || isStartingSession}
+                onClick={handleStartSession}
+              >
+                {isStartingSession ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5 fill-current" />}
+                Start Camera
+              </Button>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <CheckCircle2 className="h-5 w-5" />
+        )}
+
+        {/* ── Dynamic Stats Row ── */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <Card className="bg-card">
+            <CardContent className="p-5 flex flex-col justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground mb-3">
+                <Users className="h-4 w-4" />
+                <p className="text-sm font-medium">Total Enrolled</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Present</p>
-                <p className="text-lg font-bold text-emerald-600">{present}</p>
-              </div>
+              <p className="text-3xl font-bold tracking-tight">{total}</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                <XCircle className="h-5 w-5" />
+          <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/50">
+            <CardContent className="p-5 flex flex-col justify-between">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 mb-3">
+                <CheckCircle2 className="h-4 w-4" />
+                <p className="text-sm font-medium">Present</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Absent</p>
-                <p className="text-lg font-bold text-red-600">{absent}</p>
-              </div>
+              <p className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                {present}
+              </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <CheckCircle2 className="h-5 w-5" />
+          <Card className="bg-red-50/50 dark:bg-red-950/20 border-red-100 dark:border-red-900/50">
+            <CardContent className="p-5 flex flex-col justify-between">
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-500 mb-3">
+                <XCircle className="h-4 w-4" />
+                <p className="text-sm font-medium">Absent</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Rate</p>
-                <p className="text-lg font-bold text-blue-600">
-                  {attendanceRate.toFixed(1)}%
-                </p>
+              <p className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">
+                {absent}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/50">
+            <CardContent className="p-5 flex flex-col justify-between">
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-500 mb-3">
+                <CheckCircle2 className="h-4 w-4" />
+                <p className="text-sm font-medium">Attendance Rate</p>
               </div>
+              <p className="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+                {attendanceRate.toFixed(1)}%
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* ── Review queue ── */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Low-confidence</p>
-              <p className="mt-1 text-3xl font-bold text-foreground">
-                {lowConfidence}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Suggested manual review
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Unknown faces</p>
-              <p className="mt-1 text-3xl font-bold text-foreground">
-                {unknownFaces}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Needs matching or ignore
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Session status</p>
-              <p className="mt-1 text-3xl font-bold text-primary">
-                {sessionBadge.label}
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  disabled={sessionState !== "paused"}
-                  onClick={handleResumeSession}
-                >
-                  <Play className="h-4 w-4" />
-                  Resume
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex-1"
-                  disabled={sessionState === "idle" || sessionState === "ended"}
-                  onClick={handleEndSession}
-                >
-                  <Square className="h-4 w-4" />
-                  End
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ── Camera + Student List ── */}
+        {/* ── Main Layout Split ── */}
         <div className="grid gap-6 lg:grid-cols-5">
-          {/* Camera Feed */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Camera Feed</CardTitle>
-                {isCameraActive && (
-                  <Badge variant="success" className="gap-1">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                    </span>
-                    Live
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="relative flex aspect-video items-center justify-center rounded-xl bg-linear-to-br from-slate-800 to-slate-900 overflow-hidden">
+          {/* Left Column: Camera & Controls */}
+          <div className="lg:col-span-3 space-y-4">
+            <Card className="overflow-hidden border-2 border-muted shadow-md">
+              <div className="relative aspect-video bg-slate-950">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -758,253 +599,192 @@ export default function TeacherAttendancePage() {
                   muted
                   className="absolute inset-0 h-full w-full object-cover"
                 />
-                {/* Face detection canvas overlay */}
                 <canvas
                   ref={canvasRef}
                   className="absolute inset-0 h-full w-full"
                   style={{ pointerEvents: "none" }}
                 />
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-size-[100%_4px]" />
+                
+                {/* Subtle grid overlay for high-tech look */}
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-size-[100%_4px] pointer-events-none mix-blend-overlay" />
+                
+                {/* Corner reticles */}
+                <div className="absolute top-4 left-4 h-8 w-8 border-l-2 border-t-2 border-white/40 rounded-tl" />
+                <div className="absolute top-4 right-4 h-8 w-8 border-r-2 border-t-2 border-white/40 rounded-tr" />
+                <div className="absolute bottom-4 left-4 h-8 w-8 border-l-2 border-b-2 border-white/40 rounded-bl" />
+                <div className="absolute bottom-4 right-4 h-8 w-8 border-r-2 border-b-2 border-white/40 rounded-br" />
 
-                {/* Overlay when capturing */}
-                {(isMarking) && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-sm z-10">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                  </div>
-                )}
-
-                {/* Placeholder when camera is off */}
+                {/* Empty State / Not Live overlay */}
                 {!isCameraActive && (
-                  <div className="flex flex-col items-center justify-center text-white/40 z-10">
-                    <Camera className="h-10 w-10 mb-2" />
-                    <p className="text-sm font-medium">
-                      {sessionState === "idle"
-                        ? "Start a session to activate camera"
-                        : "Camera inactive"}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 text-white/60">
+                    <Camera className="h-12 w-12 mb-3 opacity-50" />
+                    <p className="font-medium text-lg tracking-wide">CAMERA OFFLINE</p>
+                    <p className="text-sm opacity-60 mt-1">
+                      {sessionState === "idle" ? "Select a session and click Start" : "Session has ended"}
                     </p>
                   </div>
                 )}
-
-                {/* Corner markers */}
-                <div className="absolute top-3 left-3 h-6 w-6 border-l-2 border-t-2 border-primary/60 rounded-tl" />
-                <div className="absolute top-3 right-3 h-6 w-6 border-r-2 border-t-2 border-primary/60 rounded-tr" />
-                <div className="absolute bottom-3 left-3 h-6 w-6 border-l-2 border-b-2 border-primary/60 rounded-bl" />
-                <div className="absolute bottom-3 right-3 h-6 w-6 border-r-2 border-b-2 border-primary/60 rounded-br" />
-              </div>
-
-              <div className="mt-4 flex gap-3">
-                {sessionState === "running" && liveSessionId && (
-                  <div className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
-                    {isConnecting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : isConnected ? (
-                      <>
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                        </span>
-                        Live Streaming Active
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="h-4 w-4" />
-                        Camera Ready (waiting for stream...)
-                      </>
-                    )}
+                
+                {/* Websocket Connection Status overlay */}
+                {isCameraActive && isConnecting && (
+                  <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/60 backdrop-blur text-white px-3 py-1.5 rounded-full text-xs font-medium border border-white/10">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Connecting to ML Service...
                   </div>
                 )}
-                {sessionState !== "running" && (
+              </div>
+              
+              {/* Controls bar below camera */}
+              <div className="bg-muted/30 p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center gap-1.5 text-muted-foreground font-mono bg-background px-3 py-1.5 rounded-md border shadow-sm">
+                    <Timer className="h-4 w-4" />
+                    {formatElapsed(elapsedSeconds)}
+                  </div>
+                  {selectedSession && (
+                    <div className="hidden sm:block text-muted-foreground font-medium">
+                      {selectedSession.class_name}
+                    </div>
+                  )}
+                </div>
+
+                {sessionState === "running" && (
                   <Button
                     variant="destructive"
-                    size="sm"
-                    className="flex-1"
-                    disabled={sessionState === "idle" || sessionState === "ended"}
                     onClick={handleEndSession}
+                    disabled={isEndingSession}
+                    className="w-full sm:w-auto font-medium"
                   >
-                    <Square className="h-4 w-4" />
+                    {isEndingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
                     End Session
                   </Button>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </Card>
 
-          {/* Student List */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Student List</CardTitle>
-                <Badge variant="secondary">
-                  {present}/{total || classAttendance.length}
-                </Badge>
+            {/* Warning when idle */}
+            {sessionState === "idle" && (
+              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                <p>Ensure your browser has camera permissions enabled. Live recognition will use bandwidth.</p>
               </div>
-            </CardHeader>
-            <CardContent className="max-h-[520px] overflow-y-auto space-y-2">
-              {/* Show live detected students from WebSocket */}
-              {liveDetectedStudents.length > 0 && (
-                <>
-                  <p className="text-xs font-medium text-muted-foreground px-2">
-                    LIVE DETECTED
-                  </p>
-                  {liveDetectedStudents.map((student) => (
+            )}
+          </div>
+
+          {/* Right Column: Dynamic Student List */}
+          <div className="lg:col-span-2">
+            <Card className="h-[600px] flex flex-col shadow-sm border-muted">
+              <CardHeader className="py-4 border-b bg-muted/20 shrink-0">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    {sessionState === "running" ? "Live Detections" : "Attendance Roster"}
+                  </CardTitle>
+                  <Badge variant="secondary" className="font-mono">
+                    {present}/{total}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 overflow-y-auto">
+                <div className="p-3 space-y-2">
+                  
+                  {/* Empty State */}
+                  {sessionState === "idle" && (
+                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center">
+                      <Users className="h-10 w-10 mb-3 opacity-20" />
+                      <p className="text-sm">Roster will appear here when a session is active or ended.</p>
+                    </div>
+                  )}
+
+                  {/* Loading State for Ended Session */}
+                  {sessionState === "ended" && isLoadingAttendance && (
+                    <div className="flex items-center justify-center p-6 h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
+                    </div>
+                  )}
+
+                  {/* Live View (running) */}
+                  {sessionState === "running" && liveDetectedStudents.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center">
+                      <div className="relative mb-4">
+                        <Camera className="h-8 w-8 opacity-20" />
+                        <span className="absolute top-0 right-0 h-3 w-3 animate-ping rounded-full bg-emerald-500 opacity-75" />
+                      </div>
+                      <p className="text-sm font-medium">Scanning for faces...</p>
+                      <p className="text-xs opacity-70 mt-1">Students will appear here instantly</p>
+                    </div>
+                  )}
+
+                  {sessionState === "running" && liveDetectedStudents.map((student, idx) => (
                     <div
                       key={student.student_id}
-                      className="flex items-center gap-3 rounded-xl p-2.5 hover:bg-muted/50 transition-colors"
+                      className="flex items-center gap-3 rounded-lg p-2.5 bg-background border shadow-xs animate-in slide-in-from-top-2 fade-in duration-300 hover:border-emerald-200 transition-colors"
                     >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 className="h-4 w-4" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <CheckCircle2 className="h-5 w-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
+                        <p className="truncate text-sm font-semibold text-foreground">
                           {student.student_name}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          Roll: {student.student_roll_number} · {(student.confidence * 100).toFixed(0)}%
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-[10px] bg-muted px-1 rounded">{student.student_roll_number}</span>
+                          <span>• {(student.confidence * 100).toFixed(0)}% Match</span>
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <Badge variant="success">PRESENT</Badge>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {new Date(student.marked_at).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                        <p className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mb-1">
+                          PRESENT
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(student.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </p>
                       </div>
                     </div>
                   ))}
-                </>
-              )}
 
-              {/* Show legacy manual capture results */}
-              {recognizedResults.length > 0 && recognizedResults.map((result, idx) => (
-                  <div
-                    key={`live-${idx}`}
-                    className={`flex items-center gap-3 rounded-xl p-2.5 transition-colors ${
-                      result.face_matched ? "hover:bg-muted/50" : "bg-red-50/50"
-                    }`}
-                  >
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                        result.face_matched
-                          ? "bg-emerald-100 text-emerald-600"
-                          : "bg-red-100 text-red-600"
-                      }`}
-                    >
-                      {result.face_matched ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {result.face_matched ? result.message : "Unknown Face"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Confidence: {(result.confidence * 100).toFixed(1)}%
-                        {result.is_suspicious && " · ⚠️ Suspicious"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <Badge
-                        variant={
-                          result.status === "PRESENT"
-                            ? "success"
-                            : "destructive"
-                        }
+                  {/* Ended View (shows all students) */}
+                  {sessionState === "ended" && !isLoadingAttendance && classAttendance.map((record) => {
+                    const isPresent = record.status === "PRESENT";
+                    return (
+                      <div
+                        key={record.id}
+                        className={`flex items-center gap-3 rounded-lg p-2.5 border transition-all ${
+                          isPresent
+                            ? "bg-background shadow-xs hover:border-emerald-200"
+                            : "bg-red-50/30 border-red-100 dark:bg-red-950/10 dark:border-red-900/30"
+                        }`}
                       >
-                        {result.status}
-                      </Badge>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {new Date(result.marked_at).toLocaleTimeString(
-                          "en-US",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-              {/* Show server-side attendance records when session is ended */}
-              {sessionState === "ended" && isLoadingAttendance && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <Avatar
+                          fallback={record.student_detail ? record.student_detail.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2) : "?"}
+                          className={`h-9 w-9 border-2 ${isPresent ? "border-emerald-100 text-emerald-700 bg-emerald-50" : "border-red-100 text-red-700 bg-red-50"}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className={`truncate text-sm font-semibold ${isPresent ? "text-foreground" : "text-foreground/80"}`}>
+                            {record.student_detail?.name || record.student}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {record.verification_log
+                              ? `Verified • ${(record.verification_log.face_confidence * 100).toFixed(0)}% match`
+                              : "Auto-marked"}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block ${
+                            isPresent ? "text-emerald-700 bg-emerald-100" : "text-red-700 bg-red-100"
+                          }`}>
+                            {record.status}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground block">
+                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-
-              {sessionState === "ended" &&
-                !isLoadingAttendance &&
-                classAttendance.map((record) => (
-                  <div
-                    key={record.id}
-                    className={`flex items-center gap-3 rounded-xl p-2.5 transition-colors ${
-                      record.status === "ABSENT"
-                        ? "bg-red-50/50"
-                        : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <Avatar
-                      fallback={
-                        record.student_detail
-                          ? record.student_detail
-                              .split(" ")
-                              .map((n: string) => n[0])
-                              .join("")
-                              .slice(0, 2)
-                          : "?"
-                      }
-                      size="sm"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {record.student_detail || record.student}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.verification_log
-                          ? `Confidence: ${(
-                              record.verification_log.face_confidence * 100
-                            ).toFixed(1)}%`
-                          : "No verification data"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <Badge
-                        variant={
-                          record.status === "PRESENT"
-                            ? "success"
-                            : "destructive"
-                        }
-                      >
-                        {record.status}
-                      </Badge>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {new Date(record.marked_at).toLocaleTimeString(
-                          "en-US",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-              {/* Empty state */}
-              {recognizedResults.length === 0 &&
-                (sessionState === "idle" || sessionState === "running") && (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    {sessionState === "idle"
-                      ? "Start a session to see attendance data."
-                      : "Capture faces to begin marking attendance."}
-                  </div>
-                )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </>

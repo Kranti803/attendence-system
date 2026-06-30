@@ -5,6 +5,8 @@ export interface ClassSession {
   start_time: string;  // HH:MM:SS
   end_time: string;    // HH:MM:SS
   subject: string;     // UUID
+  subject_name?: string;
+  subject_code?: string;
   created_at: string;
   updated_at: string;
 }

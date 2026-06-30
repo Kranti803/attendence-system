@@ -43,6 +43,27 @@ import {
 import { useCreateStudent, useStudents, useUpdateStudent, useDeleteStudent } from "@/hooks/useStudent";
 import { Student } from "@/types/student";
 import { toast } from "sonner";
+
+const getErrorMessage = (err: any, fallback: string = "An error occurred") => {
+  const errorData = err?.response?.data?.error;
+  if (!errorData) {
+    return err?.response?.data?.message || err?.message || fallback;
+  }
+  if (typeof errorData === "string") {
+    return errorData;
+  }
+  if (typeof errorData === "object") {
+    return Object.entries(errorData)
+      .map(([key, val]) => {
+        const fieldName = key.replace(/_/g, " ");
+        const messages = Array.isArray(val) ? val.join(", ") : String(val);
+        return `${fieldName}: ${messages}`;
+      })
+      .join(" | ");
+  }
+  return fallback;
+};
+
 export default function StudentManagementPage() {
   const [open, setOpen] = React.useState(false);
   const [editingStudentId, setEditingStudentId] = React.useState<string | null>(null);
@@ -163,7 +184,7 @@ export default function StudentManagementPage() {
             resetForm();
             toast.success("Student updated successfully");
           },
-          onError: (err) => toast.error(err.message),
+          onError: (err) => toast.error(getErrorMessage(err, "Failed to update student")),
         }
       );
       return;
@@ -187,7 +208,7 @@ export default function StudentManagementPage() {
           resetForm();
           toast.success("Student created successfully");
         },
-        onError: (err) => toast.error(err.message),
+        onError: (err) => toast.error(getErrorMessage(err, "Failed to create student")),
       }
     );
   };
@@ -238,7 +259,7 @@ export default function StudentManagementPage() {
         setDeleteTarget(null);
         toast.success("Student deleted successfully");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toast.error(getErrorMessage(err, "Failed to delete student")),
     });
   };
 

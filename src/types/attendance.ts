@@ -41,9 +41,19 @@ export interface AttendanceVerificationLog {
 export interface AttendanceRead {
   id: string;
   student: string;
-  student_detail?: string;
+  student_detail?: {
+    email: string;
+    name: string;
+    roll_number: string;
+  };
   class_session: string;
-  class_session_detail?: string;
+  class_session_detail?: {
+    id: string;
+    class_name: string;
+    subject: string;
+    date: string;
+    start_time: string;
+  };
   status: 'PRESENT' | 'ABSENT';
   marked_at: string;
   verification_log?: AttendanceVerificationLog;

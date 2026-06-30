@@ -7,6 +7,7 @@ import {
   getMyFaceEnrollmentStatusFn,
   startAttendanceSessionFn,
   endAttendanceSessionFn,
+  getAllAttendanceFn,
 } from '@/services/attendance.service';
 import {
   AttendanceMarkPayload,
@@ -88,6 +89,16 @@ export const useSessionSummary = (sessionId: string | null, isLive = false) => {
     queryFn: () => getSessionSummaryFn(sessionId!),
     enabled: !!sessionId,
     refetchInterval: isLive ? 5000 : false,
+  });
+};
+
+/**
+ * Query: Get all attendance records for teacher's subjects.
+ */
+export const useTeacherAttendance = () => {
+  return useQuery<AttendanceRead[], Error>({
+    queryKey: ['teacherAttendance'],
+    queryFn: getAllAttendanceFn,
   });
 };
 

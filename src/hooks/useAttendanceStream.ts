@@ -7,7 +7,7 @@ interface UseAttendanceStreamOptions {
   onDetected?: (students: DetectedStudent[]) => void;
   onConnected?: () => void;
   onError?: (error: string) => void;
-  frameInterval?: number; // ms between frames (default 150ms)
+  frameInterval?: number; // ms between frames (default 300ms)
 }
 
 interface UseAttendanceStreamReturn {
@@ -24,7 +24,7 @@ export const useAttendanceStream = ({
   onDetected,
   onConnected,
   onError,
-  frameInterval = 150,
+  frameInterval = 300,
 }: UseAttendanceStreamOptions): UseAttendanceStreamReturn => {
   const wsRef = useRef<WebSocket | null>(null);
   const onDetectedRef = useRef(onDetected);
@@ -62,6 +62,20 @@ export const useAttendanceStream = ({
 
     wsRef.current = ws;
 
+    // ── Stale-faces watchdog ────────────────────────────────────────────────
+    // If the backend goes silent (busy processing, Render cold-start, etc.) for
+    // more than FACE_STALE_MS milliseconds, clear the face boxes so the user
+    // doesn't see a permanently-green box after stepping out of frame.
+    const FACE_STALE_MS = 2000;
+    let staleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetStaleTimer = () => {
+      if (staleTimer) clearTimeout(staleTimer);
+      staleTimer = setTimeout(() => {
+        if (isActive) setFaces([]);
+      }, FACE_STALE_MS);
+    };
+
     ws.onopen = () => {
       if (!isActive) return;
       setIsConnected(true);
@@ -75,6 +89,10 @@ export const useAttendanceStream = ({
 
         switch (message.type) {
           case 'frame_processed': {
+            // Every time ANY frame result arrives, reset the stale timer.
+            // This means boxes only clear if the backend goes SILENT for 2s.
+            resetStaleTimer();
+
             // Update face bounding boxes on every frame (replaces, not accumulates)
             setFaces(message.faces ?? []);
 
@@ -131,6 +149,7 @@ export const useAttendanceStream = ({
       if (!isActive) return;
       setIsConnected(false);
       setIsConnecting(false);
+      setFaces([]); // clear boxes on disconnect
 
       let closeMessage: string | null = null;
       if (event.code === 4003) {
@@ -152,6 +171,7 @@ export const useAttendanceStream = ({
 
     return () => {
       isActive = false;
+      if (staleTimer) clearTimeout(staleTimer);
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close();
       }
@@ -191,10 +211,10 @@ export const useAttendanceCameraStream = (
   useEffect(() => {
     if (!isStreaming || !videoRef.current) return;
 
-    // Create offscreen canvas
+    // Create offscreen canvas — smaller = faster transmission to Render
     const canvas = document.createElement('canvas');
-    canvas.width = 640; // Reduced size for faster transmission
-    canvas.height = 480;
+    canvas.width = 480;
+    canvas.height = 360;
     canvasRef.current = canvas;
 
     intervalRef.current = setInterval(() => {
@@ -204,7 +224,9 @@ export const useAttendanceCameraStream = (
       if (!ctx) return;
 
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const frameData = canvasRef.current.toDataURL('image/jpeg', 0.7);
+      // 0.6 quality keeps file size small; HOG operates on grayscale so quality
+      // beyond 0.65 yields diminishing returns on recognition accuracy.
+      const frameData = canvasRef.current.toDataURL('image/jpeg', 0.6);
       sendFrame(frameData);
     }, interval);
 

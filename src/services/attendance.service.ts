@@ -58,6 +58,14 @@ export const getSessionSummaryFn = async (sessionId: string): Promise<SessionSum
 };
 
 /**
+ * Get all attendance records for teacher's subjects.
+ */
+export const getAllAttendanceFn = async (): Promise<AttendanceRead[]> => {
+  const response = await apiClient.get<AttendanceRead[]>('/attendance/');
+  return (response.data as any)?.data || response.data;
+};
+
+/**
  * Get current student's own attendance history (student only).
  */
 export const getMyAttendanceFn = async (): Promise<AttendanceRead[]> => {
