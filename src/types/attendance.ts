@@ -137,21 +137,30 @@ export interface WSFrameMessage {
   data: string; // base64 encoded image
 }
 
-export interface WSDetectionMessage {
-  type: 'detection';
-  detected: DetectedStudent[];
+export interface WSFrameProcessedMessage {
+  type: 'frame_processed';
+  newly_detected: {
+    student_id: string;
+    student_email?: string;
+    student_name?: string;
+    student_roll_number?: string;
+    confidence: number;
+    distance: number;
+    marked_at: string;
+  }[];
   timestamp: string;
 }
 
 export interface WSConnectedMessage {
-  type: 'connected';
+  type: 'connection_established';
   session_id: string;
+  status: string;
   message: string;
 }
 
 export interface WSErrorMessage {
   type: 'error';
-  message: string;
+  detail: string;
 }
 
-export type WSMessage = WSDetectionMessage | WSConnectedMessage | WSErrorMessage;
+export type WSMessage = WSFrameProcessedMessage | WSConnectedMessage | WSErrorMessage;

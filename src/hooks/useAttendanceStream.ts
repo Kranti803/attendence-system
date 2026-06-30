@@ -30,8 +30,6 @@ export const useAttendanceStream = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectedStudents, setDetectedStudents] = useState<DetectedStudent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const sendQueueRef = useRef<string[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Connect to WebSocket
   useEffect(() => {
@@ -57,21 +55,33 @@ export const useAttendanceStream = ({
         const message: WSMessage = JSON.parse(event.data);
 
         switch (message.type) {
-          case 'detection':
-            if (message.detected && message.detected.length > 0) {
+          case 'frame_processed': {
+            const raw = message.newly_detected || [];
+            if (raw.length > 0) {
+              const mapped: DetectedStudent[] = raw.map((d) => ({
+                student_id: d.student_id,
+                student_name: d.student_name || d.student_email || 'Unknown',
+                student_roll_number: d.student_roll_number || '',
+                marked_at: d.marked_at || message.timestamp,
+                confidence: d.confidence ?? 0,
+              }));
+
               setDetectedStudents((prev) => {
-                const newIds = new Set(message.detected.map((d) => d.student_id));
+                const newIds = new Set(mapped.map((s) => s.student_id));
                 const filtered = prev.filter((p) => !newIds.has(p.student_id));
-                return [...filtered, ...message.detected];
+                return [...filtered, ...mapped];
               });
-              onDetected?.(message.detected);
+              onDetected?.(mapped);
             }
             break;
-          case 'connected':
+          }
+          case 'connection_established':
+            // Already handled by onopen, but we can still call onConnected
+            onConnected?.();
             break;
           case 'error':
-            setError(message.message);
-            onError?.(message.message);
+            setError(message.detail || 'WebSocket error');
+            onError?.(message.detail || 'WebSocket error');
             break;
         }
       } catch (e) {
@@ -103,20 +113,6 @@ export const useAttendanceStream = ({
       wsRef.current.send(JSON.stringify({ type: 'frame', data: frameData }));
     }
   }, []);
-
-  // Start continuous frame streaming when connected
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const streamFrames = () => {
-      // This will be called by the camera component
-      // The actual frame capture/send logic stays in the component
-    };
-
-    return () => {
-      // Cleanup handled by component
-    };
-  }, [isConnected]);
 
   return {
     isConnected,
