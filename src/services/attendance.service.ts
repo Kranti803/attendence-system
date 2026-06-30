@@ -80,7 +80,15 @@ const WS_BASE_URL = (process.env.NEXT_PUBLIC_WS_URL || 'wss://attendance-backend
   .replace(/^https/, 'wss');
 
 export const getWebSocketUrl = (sessionId: string) => {
-  return `${WS_BASE_URL}/ws/attendance/stream/${sessionId}/`;
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const baseUrl = `${WS_BASE_URL}/ws/attendance/stream/${sessionId}/`;
+
+  if (!token) {
+    return baseUrl;
+  }
+
+  return `${baseUrl}?token=${encodeURIComponent(token)}`;
 };
 
 /**

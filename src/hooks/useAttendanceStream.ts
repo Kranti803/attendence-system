@@ -26,28 +26,45 @@ export const useAttendanceStream = ({
   frameInterval = 150,
 }: UseAttendanceStreamOptions): UseAttendanceStreamReturn => {
   const wsRef = useRef<WebSocket | null>(null);
+  const onDetectedRef = useRef(onDetected);
+  const onConnectedRef = useRef(onConnected);
+  const onErrorRef = useRef(onError);
+  const lastErrorRef = useRef<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectedStudents, setDetectedStudents] = useState<DetectedStudent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    onDetectedRef.current = onDetected;
+    onConnectedRef.current = onConnected;
+    onErrorRef.current = onError;
+  }, [onDetected, onConnected, onError]);
+
   // Connect to WebSocket
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setIsConnected(false);
+      setIsConnecting(false);
+      return;
+    }
 
     setIsConnecting(true);
     setError(null);
+    lastErrorRef.current = null;
     setDetectedStudents([]);
 
     const wsUrl = getWebSocketUrl(sessionId);
     const ws = new WebSocket(wsUrl);
+    let isActive = true;
 
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (!isActive) return;
       setIsConnected(true);
       setIsConnecting(false);
-      onConnected?.();
+      onConnectedRef.current?.();
     };
 
     ws.onmessage = (event) => {
@@ -71,17 +88,22 @@ export const useAttendanceStream = ({
                 const filtered = prev.filter((p) => !newIds.has(p.student_id));
                 return [...filtered, ...mapped];
               });
-              onDetected?.(mapped);
+              onDetectedRef.current?.(mapped);
             }
             break;
           }
           case 'connection_established':
-            // Already handled by onopen, but we can still call onConnected
-            onConnected?.();
             break;
           case 'error':
-            setError(message.detail || 'WebSocket error');
-            onError?.(message.detail || 'WebSocket error');
+            if (!isActive) return;
+            {
+              const nextError = message.detail || 'WebSocket error';
+              setError(nextError);
+              if (lastErrorRef.current !== nextError) {
+                lastErrorRef.current = nextError;
+                onErrorRef.current?.(nextError);
+              }
+            }
             break;
         }
       } catch (e) {
@@ -90,22 +112,49 @@ export const useAttendanceStream = ({
     };
 
     ws.onerror = (e) => {
+      if (!isActive) return;
       console.error('WebSocket error:', e);
-      setError('WebSocket connection error');
-      onError?.('WebSocket connection error');
+      const nextError = 'WebSocket connection error';
+      setError(nextError);
+      if (lastErrorRef.current !== nextError) {
+        lastErrorRef.current = nextError;
+        onErrorRef.current?.(nextError);
+      }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      if (!isActive) return;
       setIsConnected(false);
       setIsConnecting(false);
+
+      let closeMessage: string | null = null;
+      if (event.code === 4003) {
+        closeMessage = 'WebSocket auth failed. Please log in again.';
+      } else if (event.code === 4004) {
+        closeMessage = 'Attendance session not found or already ended.';
+      } else if (!event.wasClean && event.code !== 1000) {
+        closeMessage = `WebSocket closed (${event.code}).`;
+      }
+
+      if (closeMessage) {
+        setError(closeMessage);
+        if (lastErrorRef.current !== closeMessage) {
+          lastErrorRef.current = closeMessage;
+          onErrorRef.current?.(closeMessage);
+        }
+      }
     };
 
     return () => {
+      isActive = false;
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close();
       }
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
     };
-  }, [sessionId, onConnected, onDetected, onError]);
+  }, [sessionId]);
 
   // Send frame function
   const sendFrame = useCallback((frameData: string) => {
