@@ -174,12 +174,12 @@ export default function TeacherAttendancePage() {
         const w = face.w * scaleX;
         const h = face.h * scaleY;
 
-        let color = "#ef4444"; // Red default
-        if (face.status === "identified") {
-          color = "#22c55e"; // Green
-        } else if (face.status === "ambiguous") {
-          color = "#eab308"; // Yellow
-        }
+        const color =
+          face.status === "identified"
+            ? "#22c55e" // Green
+            : face.status === "ambiguous"
+            ? "#eab308" // Yellow
+            : "#ef4444"; // Red
 
         // Glowing box
         ctx.strokeStyle = color;
@@ -195,9 +195,7 @@ export default function TeacherAttendancePage() {
 
         // Label
         let label = "UNKNOWN";
-        if (face.status === "spoofing_detected") {
-          label = "SPOOF";
-        } else if (face.status === "identified") {
+        if (face.status === "identified") {
           label = face.student_name || "IDENTIFIED";
         } else if (face.status === "ambiguous") {
           label = "AMBIGUOUS";
