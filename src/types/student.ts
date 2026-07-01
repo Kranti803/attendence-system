@@ -8,7 +8,6 @@ export interface CreateStudentPayload {
   roll_number: string;
   department: string;
   year: number;
-  semester: number;
   images: File[];
 }
 
@@ -21,8 +20,12 @@ export interface Student {
   address: string;
   roll_number: string;
   department: string;
-  year: number;
-  semester: number;
+  year: number | null;
+  semester: number | null;
+  is_active?: boolean;
+  user_type?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface UpdateStudentPayload {

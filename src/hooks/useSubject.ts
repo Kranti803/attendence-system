@@ -2,9 +2,13 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
   createSubjectFn,
   getAllSubjectsFn,
+  getSubjectsWithFiltersFn,
   getSubjectByIdFn,
   updateSubjectFn,
   deleteSubjectFn,
+  exportSubjectsExcelFn,
+  GetSubjectsParams,
+  PaginatedResponse,
 } from '@/services/subject.service';
 import { CreateSubjectPayload, UpdateSubjectPayload, Subject } from '@/types/subject';
 
@@ -12,6 +16,13 @@ export const useSubjects = () => {
   return useQuery<Subject[], Error>({
     queryKey: ['subjects'],
     queryFn: getAllSubjectsFn,
+  });
+};
+
+export const useSubjectsWithFilters = (params: GetSubjectsParams) => {
+  return useQuery<PaginatedResponse<Subject>, Error>({
+    queryKey: ['subjects', params],
+    queryFn: () => getSubjectsWithFiltersFn(params),
   });
 };
 
@@ -55,5 +66,11 @@ export const useDeleteSubject = () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
       queryClient.removeQueries({ queryKey: ['subjects', id] });
     },
+  });
+};
+
+export const useExportSubjectsExcel = () => {
+  return useMutation<Blob, Error, GetSubjectsParams>({
+    mutationFn: exportSubjectsExcelFn,
   });
 };

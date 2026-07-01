@@ -34,16 +34,20 @@ import {
   Search,
   Trash2,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
 
 import {
   useCreateSubject,
   useSubjects,
+  useSubjectsWithFilters,
   useUpdateSubject,
   useDeleteSubject,
+  useExportSubjectsExcel,
 } from "@/hooks/useSubject";
 import { useTeachers } from "@/hooks/useTeacher";
 import { Subject } from "@/types/subject";
+import { toast } from "sonner";
 
 const DEPARTMENTS = [
   "Computer Science",
@@ -71,17 +75,34 @@ export default function AdminSubjectsPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<Subject | null>(null);
 
   // ── search ───────────────────────────────────────────────────────────────
-  const [search, setSearch] = React.useState("");
-
-  // ── form ─────────────────────────────────────────────────────────────────
-  const [formData, setFormData] = React.useState(EMPTY_FORM);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [departmentFilter, setDepartmentFilter] = React.useState("");
+  const [semesterFilter, setSemesterFilter] = React.useState("");
+  const [sortBy, setSortBy] = React.useState("name");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 10;
 
   // ── data / mutations ─────────────────────────────────────────────────────
-  const { data: subjects = [], isLoading } = useSubjects();
+  const { data: subjectsData, isLoading } = useSubjectsWithFilters({
+    search: searchTerm || undefined,
+    department: departmentFilter || undefined,
+    semester: semesterFilter || undefined,
+    page: currentPage,
+    page_size: itemsPerPage,
+    ordering: sortBy,
+  });
+  
+  const subjects = subjectsData?.results || [];
+  const totalCount = subjectsData?.count || 0;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
   const { data: teachers = [], isLoading: isLoadingTeachers } = useTeachers();
   const { mutate: createSubject, isPending: isCreating } = useCreateSubject();
   const { mutate: updateSubject, isPending: isUpdating } = useUpdateSubject();
-  const { mutate: deleteSubject, isPending: isDeleting } = useDeleteSubject();
+  const { mutate: deleteSubject, isPending: isDeleting } = useDeleteSubject(); // Delete loading state
+  const { mutate: exportExcel, isPending: isExporting } = useExportSubjectsExcel();
+
+  const [formData, setFormData] = React.useState(EMPTY_FORM);
 
   const isPending = isCreating || isUpdating;
 
@@ -150,21 +171,37 @@ export default function AdminSubjectsPage() {
     });
   };
 
-  // ── filtered list ─────────────────────────────────────────────────────────
-  const filtered = subjects.filter((s) => {
-    const q = search.toLowerCase();
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.code.toLowerCase().includes(q) ||
-      s.department.toLowerCase().includes(q)
-    );
-  });
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setDepartmentFilter("");
+    setSemesterFilter("");
+    setSortBy("name");
+    setCurrentPage(1);
+  };
 
-  // ── teacher name lookup ───────────────────────────────────────────────────
-  const teacherName = (id?: string | null) => {
-    if (!id) return null;
-    const t = teachers.find((t) => t.id.toString() === id);
-    return t ? `${t.first_name} ${t.last_name}` : null;
+  const handleExportExcel = () => {
+    exportExcel({
+      search: searchTerm || undefined,
+      department: departmentFilter || undefined,
+      semester: semesterFilter || undefined,
+      ordering: sortBy,
+    }, {
+      onSuccess: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `subjects_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.success('Subjects exported successfully');
+      },
+      onError: (error) => {
+        toast.error('Failed to export subjects');
+        console.error('Export error:', error);
+      },
+    });
   };
 
   return (
@@ -181,12 +218,15 @@ export default function AdminSubjectsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4" />
-              Export
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+              {isExporting ? 'Exporting...' : 'Export'}
             </Button>
-
-            {/* ── Create / Edit Dialog ────────────────────────────────── */}
             <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
               <DialogTrigger asChild>
                 <Button size="sm" onClick={openCreate}>
@@ -338,14 +378,53 @@ export default function AdminSubjectsPage() {
                 <Input
                   placeholder="Search by code, name, or department…"
                   className="pl-9"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 />
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Department
+                <div className="relative">
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => {
+                      setDepartmentFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Departments</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <div className="relative">
+                  <select
+                    value={semesterFilter}
+                    onChange={(e) => {
+                      setSemesterFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Semesters</option>
+                    {SEMESTERS.map((s) => (
+                      <option key={s} value={s}>Semester {s}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleClearFilters}
+                  disabled={!searchTerm && !departmentFilter && !semesterFilter}
+                >
+                  Clear
                 </Button>
               </div>
             </div>
@@ -357,15 +436,25 @@ export default function AdminSubjectsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>All Subjects</CardTitle>
-              <Badge variant="secondary">{filtered.length} total</Badge>
+              <Badge variant="secondary">{totalCount} total</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Department</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'name' ? '-name' : 'name')}
+                  >
+                    Subject {sortBy === 'name' && '↑'} {sortBy === '-name' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'department' ? '-department' : 'department')}
+                  >
+                    Department {sortBy === 'department' && '↑'} {sortBy === '-department' && '↓'}
+                  </TableHead>
                   <TableHead className="text-center">Semester</TableHead>
                   <TableHead>Teacher</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -381,14 +470,14 @@ export default function AdminSubjectsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : filtered.length === 0 ? (
+                ) : subjects.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
                       <p className="text-muted-foreground">No subjects found.</p>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((s) => (
+                  subjects.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -406,7 +495,7 @@ export default function AdminSubjectsPage() {
                         {s.semester ? `Sem ${s.semester}` : "—"}
                       </TableCell>
                       <TableCell>
-                        {teacherName(typeof s.teacher === "string" ? s.teacher : null) ?? (
+                        {s.teacher_name ?? (
                           <span className="text-muted-foreground text-xs">Unassigned</span>
                         )}
                       </TableCell>
@@ -437,6 +526,45 @@ export default function AdminSubjectsPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {subjects.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} subjects
+              </p>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                >
+                  Previous
+                </Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                {totalPages > 5 && <span className="text-muted-foreground">...</span>}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

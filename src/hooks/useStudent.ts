@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { createStudentFn, getAllStudentsFn, updateStudentFn, deleteStudentFn } from '@/services/student.service';
+import { createStudentFn, getAllStudentsFn, updateStudentFn, deleteStudentFn, getStudentsWithFiltersFn, GetStudentsParams, PaginatedResponse, exportStudentsExcelFn } from '@/services/student.service';
 import { CreateStudentPayload, UpdateStudentPayload, Student } from '@/types/student';
 
 export const useCreateStudent = () => {
@@ -17,6 +17,19 @@ export const useStudents = () => {
   return useQuery<Student[], Error>({
     queryKey: ['students'],
     queryFn: getAllStudentsFn,
+  });
+};
+
+export const useStudentsWithFilters = (params: GetStudentsParams) => {
+  return useQuery<PaginatedResponse<Student>, Error>({
+    queryKey: ['students', params],
+    queryFn: () => getStudentsWithFiltersFn(params),
+  });
+};
+
+export const useExportStudentsExcel = () => {
+  return useMutation<Blob, Error, GetStudentsParams>({
+    mutationFn: exportStudentsExcelFn,
   });
 };
 

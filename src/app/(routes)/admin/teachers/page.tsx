@@ -5,8 +5,10 @@ import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   useCreateTeacher,
   useTeachers,
+  useTeachersWithFilters,
   useUpdateTeacher,
   useDeleteTeacher,
+  useExportTeachersExcel,
 } from "@/hooks/useTeacher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,11 +79,31 @@ export default function TeacherManagementPage() {
   // ── form state ────────────────────────────────────────────────────────────
   const [formData, setFormData] = React.useState(EMPTY_FORM);
 
+  // ── filter & search state ──────────────────────────────────────────────────
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [departmentFilter, setDepartmentFilter] = React.useState('');
+  const [sortBy, setSortBy] = React.useState('employee_id');
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 10;
+
   // ── data / mutations ──────────────────────────────────────────────────────
-  const { data: teachers = [], isLoading } = useTeachers();
   const { mutate: createTeacher, isPending: isCreating } = useCreateTeacher();
   const { mutate: updateTeacher, isPending: isUpdating } = useUpdateTeacher();
   const { mutate: deleteTeacher, isPending: isDeleting } = useDeleteTeacher();
+  const { mutate: exportExcel, isPending: isExporting } = useExportTeachersExcel();
+  
+  // Use filtered query with backend parameters
+  const { data: teachersData, isLoading } = useTeachersWithFilters({
+    search: searchTerm || undefined,
+    department: departmentFilter || undefined,
+    page: currentPage,
+    page_size: itemsPerPage,
+    ordering: sortBy,
+  });
+
+  const teachers = teachersData?.results || [];
+  const totalCount = teachersData?.count || 0;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   const isPending = isCreating || isUpdating;
 
@@ -176,6 +198,37 @@ export default function TeacherManagementPage() {
     });
   };
 
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setDepartmentFilter('');
+    setSortBy('employee_id');
+    setCurrentPage(1);
+  };
+
+  const handleExportExcel = () => {
+    exportExcel({
+      search: searchTerm || undefined,
+      department: departmentFilter || undefined,
+      ordering: sortBy,
+    }, {
+      onSuccess: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `teachers_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.success('Teachers exported successfully');
+      },
+      onError: (error) => {
+        toast.error('Failed to export teachers');
+        console.error('Export error:', error);
+      },
+    });
+  };
+
   return (
     <>
       <TopNavbar title="Teacher Management" userInitials="AU" />
@@ -190,12 +243,16 @@ export default function TeacherManagementPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4" />
-              Export
+            <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+              {isExporting ? 'Exporting...' : 'Export'}
             </Button>
-
-            {/* ── Create / Edit Dialog ───────────────────────────────────── */}
             <Dialog
               open={open}
               onOpenChange={(v) => {
@@ -410,6 +467,7 @@ export default function TeacherManagementPage() {
               </DialogContent>
             </Dialog>
           </div>
+          </div>
         </div>
 
         {/* ── Filters ────────────────────────────────────────────────────── */}
@@ -419,18 +477,39 @@ export default function TeacherManagementPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by name, ID, or department…"
+                  placeholder="Search by name, ID, or email…"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="pl-9"
                 />
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Department
-                </Button>
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Status
+                <div className="relative">
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => {
+                      setDepartmentFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Departments</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleClearFilters}
+                  disabled={!searchTerm && !departmentFilter}
+                >
+                  Clear
                 </Button>
               </div>
             </div>
@@ -442,7 +521,7 @@ export default function TeacherManagementPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>All Teachers</CardTitle>
-              <Badge variant="secondary">{teachers.length} total</Badge>
+              <Badge variant="secondary">{totalCount} total</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -450,9 +529,18 @@ export default function TeacherManagementPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Teacher</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Address</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'employee_id' ? '-employee_id' : 'employee_id')}
+                  >
+                    ID {sortBy === 'employee_id' && '↑'} {sortBy === '-employee_id' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'department' ? '-department' : 'department')}
+                  >
+                    Department {sortBy === 'department' && '↑'} {sortBy === '-department' && '↓'}
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -460,7 +548,7 @@ export default function TeacherManagementPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <div className="flex items-center justify-center">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
                         <span className="text-muted-foreground">
@@ -471,7 +559,7 @@ export default function TeacherManagementPage() {
                   </TableRow>
                 ) : teachers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <p className="text-muted-foreground">
                         No teachers found.
                       </p>
@@ -483,9 +571,10 @@ export default function TeacherManagementPage() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar
-                            fallback={`${teacher.first_name} ${teacher.last_name}`
+                            fallback={`${teacher.first_name || ''} ${teacher.last_name || ''}`
                               .replace(/^(Dr\.|Prof\.)\s*/, "")
                               .split(" ")
+                              .filter(n => n)
                               .map((n) => n[0])
                               .join("")}
                             size="sm"
@@ -497,11 +586,6 @@ export default function TeacherManagementPage() {
                             <p className="text-xs text-muted-foreground">
                               {teacher.email}
                             </p>
-                            {teacher.phone_no && (
-                              <p className="text-xs text-muted-foreground">
-                                {teacher.phone_no}
-                              </p>
-                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -509,22 +593,9 @@ export default function TeacherManagementPage() {
                         {teacher.employee_id || teacher.id}
                       </TableCell>
                       <TableCell>{teacher.department || "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                        {teacher.address || (
-                          <span className="text-xs italic">—</span>
-                        )}
-                      </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            teacher.status === "Active"
-                              ? "success"
-                              : teacher.status === "On Leave"
-                                ? "warning"
-                                : "secondary"
-                          }
-                        >
-                          {teacher.status || "Active"}
+                        <Badge variant={teacher.is_active ? "success" : "secondary"}>
+                          {teacher.is_active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -556,20 +627,37 @@ export default function TeacherManagementPage() {
             {/* Pagination */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing {teachers.length} teacher{teachers.length !== 1 ? "s" : ""}
+                Showing {teachers.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} teachers
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                >
                   Previous
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary-dark"
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                {totalPages > 5 && <span className="text-muted-foreground">...</span>}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 >
-                  1
-                </Button>
-                <Button variant="outline" size="sm">
                   Next
                 </Button>
               </div>

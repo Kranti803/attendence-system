@@ -16,11 +16,13 @@ export interface UpdateSubjectPayload {
 
 export interface Subject {
   id: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   name: string;
   code: string;
   department: string;
-  semester: number;
+  semester?: number | null;
   teacher?: string | null;
+  teacher_name?: string;
+  teacher_email?: string;
 }

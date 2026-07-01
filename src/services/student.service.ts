@@ -13,7 +13,6 @@ export const createStudentFn = async (payload: CreateStudentPayload): Promise<St
   formData.append('roll_number', payload.roll_number);
   formData.append('department', payload.department);
   formData.append('year', payload.year.toString());
-  formData.append('semester', payload.semester.toString());
 
   if (payload.images && payload.images.length > 0) {
     payload.images.forEach((image) => {
@@ -32,6 +31,86 @@ export const createStudentFn = async (payload: CreateStudentPayload): Promise<St
 export const getAllStudentsFn = async (): Promise<Student[]> => {
   const response = await apiClient.get<ApiResponse<Student[]>>('/students/');
   return response.data.data;
+};
+
+export interface GetStudentsParams {
+  search?: string;
+  department?: string;
+  year?: number;
+  page?: number;
+  page_size?: number;
+  ordering?: string; // e.g., 'first_name', '-created_at'
+}
+
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+/**
+ * Export students as Excel file
+ */
+export const exportStudentsExcelFn = async (params: GetStudentsParams): Promise<Blob> => {
+  try {
+    const response = await apiClient.get('/students/export_excel/', {
+      params: {
+        search: params.search || undefined,
+        department: params.department || undefined,
+        year: params.year || undefined,
+        ordering: params.ordering || undefined,
+      },
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error exporting students:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get students with filtering, searching, sorting, and pagination
+ * All parameters are backend-powered
+ */
+export const getStudentsWithFiltersFn = async (params: GetStudentsParams): Promise<PaginatedResponse<Student>> => {
+  try {
+    const response = await apiClient.get<any>('/students/', {
+      params: {
+        search: params.search || undefined,
+        department: params.department || undefined,
+        year: params.year || undefined,
+        page: params.page || 1,
+        page_size: params.page_size || 10,
+        ordering: params.ordering || undefined,
+      },
+    });
+    
+    console.log('Raw API Response:', response.data);
+    
+    // API returns custom format: { data: [...], success: true }
+    // Need to transform to paginated format
+    const apiData = response.data;
+    
+    // Check if response has custom format
+    if (apiData.data && apiData.success !== undefined) {
+      // Custom format: wrap array in paginated structure
+      const studentList = Array.isArray(apiData.data) ? apiData.data : [];
+      return {
+        count: studentList.length,
+        next: null,
+        previous: null,
+        results: studentList,
+      };
+    }
+    
+    // Otherwise assume standard DRF paginated format
+    return apiData;
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    throw error;
+  }
 };
 
 export const updateStudentFn = async ({ id, payload }: { id: string, payload: UpdateStudentPayload }): Promise<Student> => {

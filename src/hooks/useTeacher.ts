@@ -2,8 +2,12 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
   createTeacherFn,
   getAllTeachersFn,
+  getTeachersWithFiltersFn,
   updateTeacherFn,
   deleteTeacherFn,
+  exportTeachersExcelFn,
+  GetTeachersParams,
+  PaginatedResponse,
 } from '@/services/teacher.service';
 import { CreateTeacherPayload, UpdateTeacherPayload, Teacher } from '@/types/teacher';
 
@@ -11,6 +15,13 @@ export const useTeachers = () => {
   return useQuery<Teacher[], Error>({
     queryKey: ['teachers'],
     queryFn: getAllTeachersFn,
+  });
+};
+
+export const useTeachersWithFilters = (params: GetTeachersParams) => {
+  return useQuery<PaginatedResponse<Teacher>, Error>({
+    queryKey: ['teachers', params],
+    queryFn: () => getTeachersWithFiltersFn(params),
   });
 };
 
@@ -41,5 +52,11 @@ export const useDeleteTeacher = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
     },
+  });
+};
+
+export const useExportTeachersExcel = () => {
+  return useMutation<Blob, Error, GetTeachersParams>({
+    mutationFn: exportTeachersExcelFn,
   });
 };

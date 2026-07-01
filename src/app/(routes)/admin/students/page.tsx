@@ -40,7 +40,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useCreateStudent, useStudents, useUpdateStudent, useDeleteStudent } from "@/hooks/useStudent";
+import { useCreateStudent, useStudents, useUpdateStudent, useDeleteStudent, useStudentsWithFilters, useExportStudentsExcel } from "@/hooks/useStudent";
 import { Student } from "@/types/student";
 import { toast } from "sonner";
 
@@ -69,6 +69,15 @@ export default function StudentManagementPage() {
   const [editingStudentId, setEditingStudentId] = React.useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<Student | null>(null);
   const [showPassword, setShowPassword] = React.useState(false);
+
+  // Filter & Search States
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [departmentFilter, setDepartmentFilter] = React.useState('');
+  const [yearFilter, setYearFilter] = React.useState('');
+  const [sortBy, setSortBy] = React.useState('first_name');
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 10;
+
   const departments = [
     "Computer Science",
     "Mathematics",
@@ -87,7 +96,6 @@ export default function StudentManagementPage() {
     roll_number: "",
     department: "",
     year: "",
-    semester: "",
   });
 
   const [capturedPhotos, setCapturedPhotos] = React.useState<File[]>([]);
@@ -101,9 +109,63 @@ export default function StudentManagementPage() {
   const { mutate: addStudent, isPending: isCreating } = useCreateStudent();
   const { mutate: updateStudent, isPending: isUpdating } = useUpdateStudent();
   const { mutate: deleteStudent } = useDeleteStudent();
-  const { data: students = [], isLoading: isLoadingStudents } = useStudents();
+  const { mutate: exportExcel, isPending: isExporting } = useExportStudentsExcel();
+  
+  // Use filtered query with backend parameters
+  const { data: studentsData, isLoading: isLoadingStudents } = useStudentsWithFilters({
+    search: searchTerm || undefined,
+    department: departmentFilter || undefined,
+    year: yearFilter ? parseInt(yearFilter) : undefined,
+    page: currentPage,
+    page_size: itemsPerPage,
+    ordering: sortBy,
+  });
+
+  const students = studentsData?.results || [];
+  const totalCount = studentsData?.count || 0;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
   
   const isPending = isCreating || isUpdating;
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('Students Data:', studentsData);
+    console.log('Students Array:', students);
+    console.log('Total Count:', totalCount);
+  }, [studentsData, students, totalCount]);
+
+  const handleExportExcel = () => {
+    exportExcel({
+      search: searchTerm || undefined,
+      department: departmentFilter || undefined,
+      year: yearFilter ? parseInt(yearFilter) : undefined,
+      ordering: sortBy,
+    }, {
+      onSuccess: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `students_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.success('Students exported successfully');
+      },
+      onError: (error) => {
+        toast.error('Failed to export students');
+        console.error('Export error:', error);
+      },
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setDepartmentFilter('');
+    setYearFilter('');
+    setSortBy('first_name');
+    setCurrentPage(1);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -185,7 +247,6 @@ export default function StudentManagementPage() {
             roll_number: formData.roll_number,
             department: formData.department,
             year: parseInt(formData.year, 10),
-            semester: parseInt(formData.semester, 10),
           },
         },
         {
@@ -209,7 +270,6 @@ export default function StudentManagementPage() {
       {
         ...formData,
         year: parseInt(formData.year, 10),
-        semester: parseInt(formData.semester, 10),
         images: capturedPhotos,
       },
       {
@@ -234,7 +294,6 @@ export default function StudentManagementPage() {
       roll_number: "",
       department: "",
       year: "",
-      semester: "",
     });
     setCapturedPhotos([]);
     setEditingStudentId(null);
@@ -252,7 +311,6 @@ export default function StudentManagementPage() {
       roll_number: student.roll_number || "",
       department: student.department || "",
       year: student.year?.toString() || "",
-      semester: student.semester?.toString() || "",
     });
     setEditingStudentId(student.id);
     setOpen(true);
@@ -292,9 +350,14 @@ export default function StudentManagementPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4" />
-              Export
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+              {isExporting ? 'Exporting...' : 'Export'}
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -429,26 +492,7 @@ export default function StudentManagementPage() {
                           <Input name="year" type="number" value={formData.year} onChange={handleInputChange} placeholder="e.g. 2026" required />
                         </div>
 
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Semester <span className="text-destructive">*</span>
-                          </label>
-                          <div className="relative">
-                            <select
-                              name="semester"
-                              value={formData.semester}
-                              onChange={handleInputChange}
-                              required
-                              className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="" disabled>Select semester…</option>
-                              {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
-                                <option key={s} value={s}>{s}{s === 1 ? 'st' : s === 2 ? 'nd' : s === 3 ? 'rd' : 'th'} Semester</option>
-                              ))}
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          </div>
-                        </div>
+
                       </div>
                     </div>
 
@@ -645,17 +689,54 @@ export default function StudentManagementPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search by name, ID, or email…"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1); // Reset to first page on search
+                  }}
                   className="pl-9"
                 />
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Department
-                </Button>
-                <Button variant="outline" size="default">
-                  <Filter className="h-4 w-4" />
-                  Status
+                <div className="relative">
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => {
+                      setDepartmentFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Departments</option>
+                    {departments.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <div className="relative">
+                  <select
+                    value={yearFilter}
+                    onChange={(e) => {
+                      setYearFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">All Years</option>
+                    {[2022, 2023, 2024, 2025, 2026].map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleClearFilters}
+                  disabled={!searchTerm && !departmentFilter && !yearFilter}
+                >
+                  Clear
                 </Button>
               </div>
             </div>
@@ -667,7 +748,7 @@ export default function StudentManagementPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>All Students</CardTitle>
-              <Badge variant="secondary">{students.length} total</Badge>
+              <Badge variant="secondary">{totalCount} total</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -675,10 +756,24 @@ export default function StudentManagementPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>Roll No.</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Year</TableHead>
-                  <TableHead>Semester</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'roll_number' ? '-roll_number' : 'roll_number')}
+                  >
+                    Roll No. {sortBy === 'roll_number' && '↑'} {sortBy === '-roll_number' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'department' ? '-department' : 'department')}
+                  >
+                    Department {sortBy === 'department' && '↑'} {sortBy === '-department' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => setSortBy(sortBy === 'year' ? '-year' : 'year')}
+                  >
+                    Year {sortBy === 'year' && '↑'} {sortBy === '-year' && '↓'}
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -695,7 +790,7 @@ export default function StudentManagementPage() {
                   </TableRow>
                 ) : students.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <p className="text-muted-foreground">No students found.</p>
                     </TableCell>
                   </TableRow>
@@ -733,9 +828,10 @@ export default function StudentManagementPage() {
                         </TableCell>
                         <TableCell>{student.department}</TableCell>
                         <TableCell>{student.year ?? "—"}</TableCell>
-                        <TableCell>{student.semester}</TableCell>
                         <TableCell>
-                          <Badge variant="success">Active</Badge>
+                          <Badge variant={student.is_active ? "success" : "secondary"}>
+                            {student.is_active ? "Active" : "Inactive"}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -757,26 +853,37 @@ export default function StudentManagementPage() {
             {/* Pagination */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing {students.length} students
+                Showing {students.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} students
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                >
                   Previous
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary-dark"
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                {totalPages > 5 && <span className="text-muted-foreground">...</span>}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 >
-                  1
-                </Button>
-                <Button variant="outline" size="sm">
-                  2
-                </Button>
-                <Button variant="outline" size="sm">
-                  3
-                </Button>
-                <Button variant="outline" size="sm">
                   Next
                 </Button>
               </div>
