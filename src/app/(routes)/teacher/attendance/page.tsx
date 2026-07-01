@@ -74,6 +74,7 @@ export default function TeacherAttendancePage() {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = React.useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = React.useState<"user" | "environment">("user");
   const facesRef = React.useRef<FaceOverlay[]>([]);
 
   // ── Elapsed timer ─────────────────────────────────────────────────────────
@@ -173,12 +174,12 @@ export default function TeacherAttendancePage() {
         const w = face.w * scaleX;
         const h = face.h * scaleY;
 
-        const color =
-          face.status === "identified"
-            ? "#22c55e" // Emerald 500
-            : face.status === "ambiguous"
-            ? "#eab308" // Yellow 500
-            : "#ef4444"; // Red 500
+        let color = "#ef4444"; // Red default
+        if (face.status === "identified") {
+          color = "#22c55e"; // Green
+        } else if (face.status === "ambiguous") {
+          color = "#eab308"; // Yellow
+        }
 
         // Glowing box
         ctx.strokeStyle = color;
@@ -189,12 +190,14 @@ export default function TeacherAttendancePage() {
         ctx.shadowBlur = 0;
 
         // Translucent fill
-        ctx.fillStyle = color + "10"; // Very light fill
+        ctx.fillStyle = color + "10";
         ctx.fillRect(x, y, w, h);
 
-        // Label - show student name if identified, otherwise status
+        // Label
         let label = "UNKNOWN";
-        if (face.status === "identified") {
+        if (face.status === "spoofing_detected") {
+          label = "SPOOF";
+        } else if (face.status === "identified") {
           label = face.student_name || "IDENTIFIED";
         } else if (face.status === "ambiguous") {
           label = "AMBIGUOUS";
@@ -258,7 +261,7 @@ export default function TeacherAttendancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: 1280, height: 720 },
+        video: { facingMode: cameraFacingMode, width: 1280, height: 720 },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -280,6 +283,10 @@ export default function TeacherAttendancePage() {
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
+  };
+
+  const toggleCameraFacing = () => {
+    setCameraFacingMode(prev => prev === "user" ? "environment" : "user");
   };
 
   // ── Session lifecycle ─────────────────────────────────────────────────────
@@ -545,6 +552,15 @@ export default function TeacherAttendancePage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleCameraFacing}
+                className="w-full sm:w-auto"
+                title={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
+              >
+                {cameraFacingMode === "user" ? "🤳 Front" : "📸 Back"}
+              </Button>
               <Button
                 size="lg"
                 className="w-full sm:w-auto"
