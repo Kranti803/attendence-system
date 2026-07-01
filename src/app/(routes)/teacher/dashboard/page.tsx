@@ -28,17 +28,27 @@ import {
   Camera,
   Clock,
   Loader2,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { useClassSessions } from "@/hooks/useClassSession";
 import { useTeacherAttendance } from "@/hooks/useAttendance";
+import { useProfile } from "@/hooks/useAuth";
 
 export default function TeacherDashboardPage() {
   const router = useRouter();
   
   const { data: classSessions = [], isLoading: isLoadingSessions } = useClassSessions();
   const { data: attendanceRecords = [], isLoading: isLoadingAttendance } = useTeacherAttendance();
+  const { data: profile } = useProfile();
+
+  // Get dynamic user initials
+  const userInitials = profile
+    ? `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase()
+    : "U";
 
   const today = new Date().toISOString().split("T")[0];
   const now = new Date();
@@ -68,6 +78,26 @@ export default function TeacherDashboardPage() {
   const totalMarkedToday = todayAttendance.length;
   const attendanceRate = totalMarkedToday > 0 ? ((studentsPresent / totalMarkedToday) * 100).toFixed(1) : "0.0";
 
+  // ── Compute Class Performance ──
+  const classPerformance = classSessions.reduce((acc, session) => {
+    const classAttendance = attendanceRecords.filter(
+      (r) => r.class_session_detail?.id === session.id
+    );
+    const present = classAttendance.filter((r) => r.status === "PRESENT").length;
+    const total = classAttendance.length;
+    const rate = total > 0 ? ((present / total) * 100).toFixed(1) : "0.0";
+    
+    acc[session.id] = { name: session.class_name, rate: parseFloat(rate) };
+    return acc;
+  }, {} as Record<string, { name: string; rate: number }>);
+
+  // ── Compute Detection Quality ──
+  const allLogs = attendanceRecords.flatMap((r) => r.verification_log ? [r.verification_log] : []);
+  const avgConfidence = allLogs.length > 0
+    ? (allLogs.reduce((sum, log) => sum + (log.face_confidence || 0), 0) / allLogs.length * 100).toFixed(1)
+    : "0.0";
+  const suspiciousCount = allLogs.filter((log) => log.is_suspicious).length;
+
   const stats = [
     { label: "Today's Classes", value: todayClasses.length.toString(), icon: BookOpen, color: "bg-primary/10 text-primary" },
     { label: "Active Session", value: activeSession ? activeSession.class_name : "None", icon: Play, color: "bg-emerald-50 text-emerald-600" },
@@ -80,7 +110,7 @@ export default function TeacherDashboardPage() {
 
   return (
     <>
-      <TopNavbar title="Dashboard" userInitials="SW" />
+      <TopNavbar title="Dashboard" userInitials={userInitials} />
       <div className="p-6 space-y-6">
         {/* ── Stats Cards ── */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -91,7 +121,11 @@ export default function TeacherDashboardPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
                     <p className="mt-1 text-2xl font-bold text-foreground">
-                      {isLoadingSessions || isLoadingAttendance ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : stat.value}
+                      {isLoadingSessions || isLoadingAttendance ? (
+                        <Skeleton className="h-8 w-16" />
+                      ) : (
+                        stat.value
+                      )}
                     </p>
                   </div>
                   <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.color}`}>
@@ -101,6 +135,70 @@ export default function TeacherDashboardPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* ── Class Performance & Detection Quality ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Class Performance */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Class Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingSessions || isLoadingAttendance ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : Object.entries(classPerformance).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No class data available</p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(classPerformance).map(([_, data]) => (
+                    <div key={data.name} className="flex items-center justify-between">
+                      <p className="text-sm font-medium truncate">{data.name}</p>
+                      <Badge
+                        variant={
+                          data.rate >= 80 ? "success" : data.rate >= 60 ? "warning" : "destructive"
+                        }
+                      >
+                        {data.rate.toFixed(1)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Detection Quality */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Detection Quality</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAttendance ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Avg Confidence</p>
+                    <p className="text-sm font-bold text-primary">{avgConfidence}%</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Suspicious</p>
+                    <Badge variant={suspiciousCount > 0 ? "destructive" : "success"}>
+                      {suspiciousCount}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Camera Feed Shortcut + Recent ── */}
@@ -154,13 +252,27 @@ export default function TeacherDashboardPage() {
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-2 min-h-[300px]">
               {isLoadingAttendance ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2.5">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                      <Skeleton className="h-6 w-12" />
+                    </div>
+                  ))}
                 </div>
               ) : recentActivity.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center px-4">
-                  <Users className="h-8 w-8 mb-2 opacity-20" />
-                  <p className="text-sm">No attendance marked today.</p>
+                  <div className="rounded-full bg-muted p-3 mb-3">
+                    <Users className="h-6 w-6 opacity-40" />
+                  </div>
+                  <p className="text-sm font-medium">No attendance marked today</p>
+                  <p className="text-xs mt-1">
+                    Attendance records will appear here once you start marking
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -218,18 +330,29 @@ export default function TeacherDashboardPage() {
               </TableHeader>
               <TableBody>
                 {isLoadingSessions ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="h-24 text-center">
-                      <div className="flex items-center justify-center">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-                        <span className="text-muted-foreground">Loading schedule...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <>
+                    {[...Array(3)].map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Skeleton className="h-4 w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-6 w-20" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
                 ) : todayClasses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="h-24 text-center">
-                      <p className="text-muted-foreground">No classes scheduled for today.</p>
+                    <TableCell colSpan={3} className="h-24">
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <Calendar className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">No classes scheduled for today.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Check back tomorrow for your schedule</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (

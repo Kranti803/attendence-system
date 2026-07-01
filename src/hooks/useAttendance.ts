@@ -8,6 +8,10 @@ import {
   startAttendanceSessionFn,
   endAttendanceSessionFn,
   getAllAttendanceFn,
+  getAttendanceReportsFn,
+  exportAttendanceExcelFn,
+  AttendanceReportParams,
+  AttendanceReportResponse,
 } from '@/services/attendance.service';
 import {
   AttendanceMarkPayload,
@@ -119,5 +123,24 @@ export const useMyFaceEnrollmentStatus = () => {
   return useQuery<FaceData, Error>({
     queryKey: ['myFaceEnrollmentStatus'],
     queryFn: getMyFaceEnrollmentStatusFn,
+  });
+};
+
+/**
+ * Query: Get filtered attendance records for reports.
+ */
+export const useAttendanceReports = (params: AttendanceReportParams) => {
+  return useQuery<AttendanceReportResponse, Error>({
+    queryKey: ['attendanceReports', params],
+    queryFn: () => getAttendanceReportsFn(params),
+  });
+};
+
+/**
+ * Mutation: Export attendance records as Excel
+ */
+export const useExportAttendanceExcel = () => {
+  return useMutation<Blob, Error, AttendanceReportParams>({
+    mutationFn: exportAttendanceExcelFn,
   });
 };

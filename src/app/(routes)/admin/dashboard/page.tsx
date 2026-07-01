@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   Card,
@@ -25,57 +26,101 @@ import {
   ArrowDownRight,
   Clock,
 } from "lucide-react";
+import {
+  getDashboardStatsFn,
+  WeeklyAttendanceData,
+  RecentActivityItem,
+  DashboardStats,
+} from "@/services/dashboard.service";
 
-/* ─── Static Data ─── */
-const stats = [
-  {
-    label: "Total Students",
-    value: "1,234",
-    change: "+12%",
-    trend: "up" as const,
-    icon: Users,
-    color: "bg-primary/10 text-primary",
-  },
-  {
-    label: "Total Teachers",
-    value: "56",
-    change: "+3%",
-    trend: "up" as const,
-    icon: GraduationCap,
-    color: "bg-emerald-500/10 text-emerald-600",
-  },
-  {
-    label: "Total Classes",
-    value: "24",
-    change: "0%",
-    trend: "neutral" as const,
-    icon: BookOpen,
-    color: "bg-amber-500/10 text-amber-600",
-  },
-  {
-    label: "Today's Attendance",
-    value: "94.2%",
-    change: "+2.1%",
-    trend: "up" as const,
-    icon: TrendingUp,
-    color: "bg-violet-500/10 text-violet-600",
-  },
-];
+interface StatConfig {
+  label: string;
+  value: string;
+  change: string;
+  trend: "up" | "down" | "neutral";
+  icon: React.ReactNode;
+  color: string;
+}
 
-const recentActivity = [
-  { time: "09:15 AM", student: "Alice Johnson", action: "Checked In", class: "CS101", status: "Present" },
-  { time: "09:14 AM", student: "Bob Williams", action: "Checked In", class: "CS101", status: "Present" },
-  { time: "09:12 AM", student: "Charlie Brown", action: "Late Arrival", class: "MATH201", status: "Late" },
-  { time: "09:10 AM", student: "Diana Ross",   action: "Checked In", class: "PHY301", status: "Present" },
-  { time: "09:08 AM", student: "Ethan Hunt",   action: "Checked In", class: "CS101", status: "Present" },
-  { time: "09:05 AM", student: "Fiona Apple",  action: "Absent",     class: "ENG102", status: "Absent" },
-  { time: "08:58 AM", student: "George Lucas",   action: "Checked In", class: "MATH201", status: "Present" },
-];
+/* ─── Skeleton Loaders ─── */
+function StatCardSkeleton() {
+  return (
+    <Card className="relative overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+            <div className="mt-3 h-8 w-32 bg-muted rounded animate-pulse" />
+            <div className="mt-3 h-3 w-20 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="h-11 w-11 bg-muted rounded-xl animate-pulse" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-40 bg-muted rounded animate-pulse" />
+          <div className="h-6 w-20 bg-muted rounded animate-pulse" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-48 bg-muted rounded animate-pulse" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-32 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-2.5">
+            <div className="h-9 w-9 bg-muted rounded-full animate-pulse" />
+            <div className="flex-1 space-y-1">
+              <div className="h-3 w-24 bg-muted rounded animate-pulse" />
+              <div className="h-2 w-32 bg-muted rounded animate-pulse" />
+            </div>
+            <div className="h-6 w-12 bg-muted rounded animate-pulse" />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="h-6 w-32 bg-muted rounded animate-pulse" />
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="h-10 bg-muted rounded animate-pulse" />
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /* ─── SVG Chart: Weekly Attendance ─── */
-function WeeklyChart() {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const values = [88, 92, 85, 94, 91, 78, 94];
+function WeeklyChart({ data }: { data: WeeklyAttendanceData[] }) {
   const max = 100;
   const h = 200;
   const w = 500;
@@ -83,6 +128,9 @@ function WeeklyChart() {
   const padY = 20;
   const chartW = w - padX * 2;
   const chartH = h - padY * 2;
+
+  const values = data.map((d) => d.rate);
+  const days = data.map((d) => d.day);
 
   const points = values
     .map((v, i) => {
@@ -106,22 +154,56 @@ function WeeklyChart() {
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={v}>
-            <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="oklch(0.91 0.01 260)" strokeDasharray="4 4" />
-            <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="oklch(0.6 0.02 260)">
+            <line
+              x1={padX}
+              y1={y}
+              x2={padX + chartW}
+              y2={y}
+              stroke="oklch(0.91 0.01 260)"
+              strokeDasharray="4 4"
+            />
+            <text
+              x={padX - 8}
+              y={y + 4}
+              textAnchor="end"
+              fontSize="10"
+              fill="oklch(0.6 0.02 260)"
+            >
               {v}%
             </text>
           </g>
         );
       })}
       <polygon points={areaPoints} fill="url(#lineGrad)" />
-      <polyline points={points} fill="none" stroke="oklch(0.46 0.22 265)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="oklch(0.46 0.22 265)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       {values.map((v, i) => {
         const x = padX + (i / (values.length - 1)) * chartW;
         const y = padY + chartH - (v / max) * chartH;
         return (
           <g key={i}>
-            <circle cx={x} cy={y} r="4" fill="oklch(0.46 0.22 265)" stroke="white" strokeWidth="2" />
-            <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="oklch(0.5 0.02 260)" fontWeight="500">
+            <circle
+              cx={x}
+              cy={y}
+              r="4"
+              fill="oklch(0.46 0.22 265)"
+              stroke="white"
+              strokeWidth="2"
+            />
+            <text
+              x={x}
+              y={h - 4}
+              textAnchor="middle"
+              fontSize="11"
+              fill="oklch(0.5 0.02 260)"
+              fontWeight="500"
+            >
               {days[i]}
             </text>
           </g>
@@ -133,10 +215,113 @@ function WeeklyChart() {
 
 /* ─── Page ─── */
 export default function AdminDashboardPage() {
+  const [stats, setStats] = useState<StatConfig[]>([]);
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyAttendanceData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Single API call to backend for ALL stats
+        const dashboardStats = await getDashboardStatsFn();
+
+        // Update stats cards
+        const updatedStats: StatConfig[] = [
+          {
+            label: "Total Students",
+            value: dashboardStats.totalStudents.toLocaleString(),
+            change: "+12%",
+            trend: "up",
+            icon: <Users className="h-5 w-5" />,
+            color: "bg-primary/10 text-primary",
+          },
+          {
+            label: "Total Teachers",
+            value: dashboardStats.totalTeachers.toLocaleString(),
+            change: "+3%",
+            trend: "up",
+            icon: <GraduationCap className="h-5 w-5" />,
+            color: "bg-emerald-500/10 text-emerald-600",
+          },
+          {
+            label: "Total Classes",
+            value: dashboardStats.totalClasses.toLocaleString(),
+            change: "0%",
+            trend: "neutral",
+            icon: <BookOpen className="h-5 w-5" />,
+            color: "bg-amber-500/10 text-amber-600",
+          },
+          {
+            label: "Today's Attendance",
+            value: `${dashboardStats.todayAttendanceRate}%`,
+            change: "+2.1%",
+            trend: "up",
+            icon: <TrendingUp className="h-5 w-5" />,
+            color: "bg-violet-500/10 text-violet-600",
+          },
+        ];
+
+        setStats(updatedStats);
+        
+        // Data is already formatted from backend, just use it directly
+        setRecentActivity(dashboardStats.recentActivity);
+        setWeeklyTrend(dashboardStats.weeklyAttendance);
+      } catch (err) {
+        console.error("Dashboard error:", err);
+        setError("Failed to load dashboard data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
+  // Show loading skeleton while fetching
+  if (isLoading) {
+    return (
+      <>
+        <TopNavbar title="Dashboard" userInitials="AU" />
+        <div className="p-6 space-y-6">
+          {/* Stats Cards Skeleton */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))}
+          </div>
+
+          {/* Chart + Activity Skeleton */}
+          <div className="grid gap-6 lg:grid-cols-5">
+            <div className="lg:col-span-3">
+              <ChartSkeleton />
+            </div>
+            <div className="lg:col-span-2">
+              <ActivitySkeleton />
+            </div>
+          </div>
+
+          {/* Table Skeleton */}
+          <TableSkeleton />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <TopNavbar title="Dashboard" userInitials="AU" />
       <div className="p-6 space-y-6">
+        {error && (
+          <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+            {error}
+          </div>
+        )}
+
         {/* ── Stats Cards ── */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
@@ -153,14 +338,16 @@ export default function AdminDashboardPage() {
                     <div className="mt-1 flex items-center gap-1">
                       {stat.trend === "up" ? (
                         <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
-                      ) : (
+                      ) : stat.trend === "down" ? (
                         <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
-                      )}
+                      ) : null}
                       <span
                         className={`text-xs font-medium ${
                           stat.trend === "up"
                             ? "text-emerald-600"
-                            : "text-destructive"
+                            : stat.trend === "down"
+                            ? "text-destructive"
+                            : "text-muted-foreground"
                         }`}
                       >
                         {stat.change} from last week
@@ -170,7 +357,7 @@ export default function AdminDashboardPage() {
                   <div
                     className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.color}`}
                   >
-                    <stat.icon className="h-5 w-5" />
+                    {stat.icon}
                   </div>
                 </div>
               </CardContent>
@@ -189,7 +376,13 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <WeeklyChart />
+              {weeklyTrend.length > 0 ? (
+                <WeeklyChart data={weeklyTrend} />
+              ) : (
+                <div className="flex items-center justify-center h-48 text-muted-foreground">
+                  No attendance data available
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -202,43 +395,50 @@ export default function AdminDashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {recentActivity.slice(0, 5).map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                    {item.student
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+              {recentActivity.length > 0 ? (
+                recentActivity.slice(0, 5).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                      {item.student
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {item.student}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.action} · {item.class}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge
+                        variant={
+                          item.status === "Present"
+                            ? "default"
+                            : item.status === "Late"
+                            ? "secondary"
+                            : "destructive"
+                        }
+                      >
+                        {item.status}
+                      </Badge>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {item.time}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {item.student}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.action} · {item.class}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <Badge
-                      variant={
-                        item.status === "Present"
-                          ? "success"
-                          : item.status === "Late"
-                          ? "warning"
-                          : "destructive"
-                      }
-                    >
-                      {item.status}
-                    </Badge>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {item.time}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-8">
+                  No activity yet
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>
@@ -249,44 +449,50 @@ export default function AdminDashboardPage() {
             <CardTitle>Today&apos;s Activity Log</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentActivity.map((item, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-muted-foreground font-mono text-xs">
-                      {item.time}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.student}</TableCell>
-                    <TableCell>{item.action}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{item.class}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          item.status === "Present"
-                            ? "success"
-                            : item.status === "Late"
-                            ? "warning"
-                            : "destructive"
-                        }
-                      >
-                        {item.status}
-                      </Badge>
-                    </TableCell>
+            {recentActivity.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Class</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {recentActivity.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-muted-foreground font-mono text-xs">
+                        {item.time}
+                      </TableCell>
+                      <TableCell className="font-medium">{item.student}</TableCell>
+                      <TableCell>{item.action}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{item.class}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            item.status === "Present"
+                              ? "default"
+                              : item.status === "Late"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-sm text-muted-foreground text-center py-8">
+                No attendance records for today
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

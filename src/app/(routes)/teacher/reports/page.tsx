@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   Card,
@@ -11,6 +12,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,33 +33,151 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Download,
-  Filter,
-  Calendar,
+  Calendar as CalendarIcon,
   FileSpreadsheet,
+  TrendingUp,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
-/* ─── Static Data ─── */
-const reports = [
-  { date: "2026-03-17", class: "CS101", totalStudents: 36, present: 32, absent: 4, rate: "88.9%" },
-  { date: "2026-03-16", class: "CS401", totalStudents: 28, present: 26, absent: 2, rate: "92.9%" },
-  { date: "2026-03-16", class: "CS101", totalStudents: 36, present: 34, absent: 2, rate: "94.4%" },
-  { date: "2026-03-15", class: "CS401", totalStudents: 28, present: 25, absent: 3, rate: "89.3%" },
-  { date: "2026-03-15", class: "CS101", totalStudents: 36, present: 33, absent: 3, rate: "91.7%" },
-  { date: "2026-03-14", class: "CS401", totalStudents: 28, present: 27, absent: 1, rate: "96.4%" },
-  { date: "2026-03-14", class: "CS101", totalStudents: 36, present: 35, absent: 1, rate: "97.2%" },
-  { date: "2026-03-13", class: "CS101", totalStudents: 36, present: 30, absent: 6, rate: "83.3%" },
-];
+import { useAttendanceReports, useExportAttendanceExcel } from "@/hooks/useAttendance";
+import { AttendanceReportParams } from "@/services/attendance.service";
 
 export default function TeacherReportsPage() {
+  // Get today's date and 7 days ago as default range
+  const today = new Date();
+  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const defaultStartDate = sevenDaysAgo.toISOString().split("T")[0];
+  const defaultEndDate = today.toISOString().split("T")[0];
+
+  // ── State for filters ──
+  const [startDate, setStartDate] = React.useState(defaultStartDate);
+  const [endDate, setEndDate] = React.useState(defaultEndDate);
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "PRESENT" | "ABSENT">("ALL");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortBy, setSortBy] = React.useState<"date" | "class" | "rate" | "present">("date");
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const pageSize = 10;
+
+  // ── Fetch reports from backend ──
+  const reportParams: AttendanceReportParams = {
+    startDate,
+    endDate,
+    status: statusFilter === "ALL" ? undefined : statusFilter,
+    search: searchQuery || undefined,
+    sortBy,
+    sortOrder,
+    page: currentPage,
+    pageSize,
+  };
+
+  const { data: reportData, isLoading } = useAttendanceReports(reportParams);
+  const exportMutation = useExportAttendanceExcel();
+
+  // ── Handlers ──
+  const handleApplyFilters = () => {
+    if (new Date(startDate) > new Date(endDate)) {
+      toast.error("Start date cannot be after end date");
+      return;
+    }
+    setCurrentPage(1); // Reset to first page
+    toast.success("Filters applied");
+  };
+
+  const handleReset = () => {
+    setStartDate(defaultStartDate);
+    setEndDate(defaultEndDate);
+    setStatusFilter("ALL");
+    setSearchQuery("");
+    setSortBy("date");
+    setSortOrder("desc");
+    setCurrentPage(1);
+    toast.success("Filters reset");
+  };
+
+  const handleExportExcel = () => {
+    if (!reportData || reportData.sessions.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+
+    exportMutation.mutate(reportParams, {
+      onSuccess: (blob) => {
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `attendance_report_${new Date().toISOString().split("T")[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success("Report exported as Excel");
+      },
+      onError: (err) => {
+        toast.error("Failed to export report: " + (err.message || "Unknown error"));
+      },
+    });
+  };
+
+  const summaryStats = reportData?.summary || {
+    total_sessions: 0,
+    average_rate: 0,
+    best_rate: 0,
+    worst_rate: 0,
+    total_present: 0,
+    total_absent: 0,
+  };
+
+  const sessionReports = reportData?.sessions || [];
+  const pagination = reportData?.pagination || {
+    current_page: 1,
+    total_pages: 1,
+    total_count: 0,
+  };
+
+  // Keep pagination controls from overflowing on small screens:
+  // show at most a handful of page buttons around the current page,
+  // with the rest represented by ellipses.
+  const getVisiblePages = () => {
+    const total = pagination.total_pages;
+    const current = pagination.current_page;
+    const delta = 1; // pages to show on each side of current
+    const pages: (number | "ellipsis")[] = [];
+
+    const range: number[] = [];
+    for (
+      let i = Math.max(2, current - delta);
+      i <= Math.min(total - 1, current + delta);
+      i++
+    ) {
+      range.push(i);
+    }
+
+    pages.push(1);
+    if (range[0] > 2) pages.push("ellipsis");
+    pages.push(...range);
+    if (range[range.length - 1] < total - 1) pages.push("ellipsis");
+    if (total > 1) pages.push(total);
+
+    return pages;
+  };
+
   return (
     <>
-      <TopNavbar title="Reports" userInitials="SW" />
-      <div className="p-6 space-y-6">
+      <TopNavbar title="Reports" />
+      <div className="p-4 space-y-4 sm:p-6 sm:space-y-6">
         {/* ── Header ── */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-foreground sm:text-2xl">
               Attendance Reports
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -53,133 +185,421 @@ export default function TeacherReportsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <FileSpreadsheet className="h-4 w-4" />
-              Export CSV
-            </Button>
-            <Button size="sm">
-              <Download className="h-4 w-4" />
-              Download PDF
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={!reportData || reportData.sessions.length === 0 || exportMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2 shrink-0" />
+              <span className="truncate">
+                {exportMutation.isPending ? "Exporting..." : "Export Excel"}
+              </span>
             </Button>
           </div>
         </div>
 
         {/* ── Filters ── */}
         <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="date"
-                  defaultValue="2026-03-13"
-                  className="pl-9"
-                />
+          <CardContent className="p-3 space-y-4 sm:p-4">
+            {/* Date Range & Status */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+              {/* Start Date Picker */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground block mb-2">Start Date</label>
+                <Popover>
+                  <PopoverTrigger>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">
+                        {format(new Date(startDate), "MMM dd, yyyy")}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={new Date(startDate)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setStartDate(date.toISOString().split("T")[0]);
+                        }
+                      }}
+                      disabled={(date) =>
+                        date > new Date(endDate) || date > new Date()
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <div className="relative flex-1">
-                <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="date"
-                  defaultValue="2026-03-17"
-                  className="pl-9"
-                />
+
+              {/* End Date Picker */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground block mb-2">End Date</label>
+                <Popover>
+                  <PopoverTrigger>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">
+                        {format(new Date(endDate), "MMM dd, yyyy")}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={new Date(endDate)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setEndDate(date.toISOString().split("T")[0]);
+                        }
+                      }}
+                      disabled={(date) =>
+                        date < new Date(startDate) || date > new Date()
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <Button variant="outline" size="default">
-                <Filter className="h-4 w-4" />
-                Class: All
-              </Button>
-              <Button size="default">Apply Filters</Button>
+
+              {/* Status Filter */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground block mb-2">Status</label>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "ALL" | "PRESENT" | "ABSENT")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Status</SelectItem>
+                    <SelectItem value="PRESENT">Present</SelectItem>
+                    <SelectItem value="ABSENT">Absent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Buttons */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground mb-2 hidden lg:block lg:invisible">
+                  Actions
+                </label>
+                <div className="flex gap-2">
+                  <Button onClick={handleApplyFilters} size="default" className="flex-1 lg:flex-none">
+                    Apply
+                  </Button>
+                  <Button onClick={handleReset} variant="outline" size="default" className="flex-1 lg:flex-none">
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Search & Sort */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Search */}
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                <label className="text-sm font-medium text-foreground block mb-2">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Class name..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="pl-9 w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Sort By */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground block mb-2">Sort By</label>
+                <Select value={sortBy} onValueChange={(value) => {
+                  setSortBy(value as "date" | "class" | "rate" | "present");
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="class">Class</SelectItem>
+                    <SelectItem value="rate">Attendance Rate</SelectItem>
+                    <SelectItem value="present">Present Count</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sort Order */}
+              <div className="min-w-0">
+                <label className="text-sm font-medium text-foreground block mb-2">Order</label>
+                <Select value={sortOrder} onValueChange={(value) => {
+                  setSortOrder(value as "asc" | "desc");
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="desc">Descending</SelectItem>
+                    <SelectItem value="asc">Ascending</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* ── Summary Cards ── */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="p-5 text-center">
-              <p className="text-sm text-muted-foreground">Average Rate</p>
-              <p className="text-3xl font-bold text-primary mt-1">91.8%</p>
-              <p className="text-xs text-muted-foreground mt-1">Across all classes</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 text-center">
-              <p className="text-sm text-muted-foreground">Total Sessions</p>
-              <p className="text-3xl font-bold text-foreground mt-1">8</p>
-              <p className="text-xs text-muted-foreground mt-1">In selected period</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 text-center">
-              <p className="text-sm text-muted-foreground">Best Attendance</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">97.2%</p>
-              <p className="text-xs text-muted-foreground mt-1">CS101 — March 14</p>
-            </CardContent>
-          </Card>
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4 sm:p-5">
+                  <Skeleton className="h-4 w-20 mb-2" />
+                  <Skeleton className="h-8 w-16" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Average Rate</p>
+                    <p className="text-2xl font-bold text-primary mt-2 sm:text-3xl">
+                      {summaryStats.average_rate.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Across {summaryStats.total_sessions} sessions
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-primary/20 shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Total Sessions</p>
+                    <p className="text-2xl font-bold text-foreground mt-2 sm:text-3xl">
+                      {summaryStats.total_sessions}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      in selected period
+                    </p>
+                  </div>
+                  <CalendarIcon className="h-8 w-8 text-muted-foreground/20 shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Best Attendance</p>
+                    <p className="text-2xl font-bold text-emerald-600 mt-2 sm:text-3xl">
+                      {summaryStats.best_rate.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Highest rate
+                    </p>
+                  </div>
+                  <CheckCircle2 className="h-8 w-8 text-emerald-600/20 shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* ── Reports Table ── */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardHeader className="p-4 sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>Detailed Reports</CardTitle>
-              <Badge variant="secondary">{reports.length} sessions</Badge>
+              <Badge variant="secondary" className="w-fit">
+                {pagination.total_count} total • Page {pagination.current_page}/{pagination.total_pages}
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead className="text-center">Present</TableHead>
-                  <TableHead className="text-center">Absent</TableHead>
-                  <TableHead className="text-center">Rate</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reports.map((r, i) => {
-                  const rateNum = parseFloat(r.rate);
-                  return (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {r.date}
-                      </TableCell>
-                      <TableCell className="font-medium">{r.class}</TableCell>
-                      <TableCell className="text-center">{r.totalStudents}</TableCell>
-                      <TableCell className="text-center text-emerald-600 font-medium">
-                        {r.present}
-                      </TableCell>
-                      <TableCell className="text-center text-red-600 font-medium">
-                        {r.absent}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={
-                            rateNum >= 90
-                              ? "success"
-                              : rateNum >= 80
-                              ? "warning"
-                              : "destructive"
-                          }
+          <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
+            {isLoading ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex flex-wrap gap-4 p-3">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                ))}
+              </div>
+            ) : sessionReports.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <AlertCircle className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  No attendance records found
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try adjusting your filters or search query
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Horizontal scroll wrapper so the table never breaks the page layout on small screens */}
+                <div className="-mx-4 overflow-x-auto sm:mx-0">
+                  <div className="min-w-[640px] px-4 sm:min-w-0 sm:px-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead className="text-center">Total Enrolled</TableHead>
+                          <TableHead className="text-center">Present</TableHead>
+                          <TableHead className="text-center">Absent</TableHead>
+                          <TableHead className="text-center">Rate</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sessionReports.map((report, idx) => (
+                          <TableRow key={`${report.session_id}-${report.date}-${idx}`}>
+                            <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                              {report.date}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <span className="block truncate max-w-[160px] sm:max-w-none">
+                                {report.class_name}
+                              </span>
+                              <span className="block text-xs text-muted-foreground font-normal truncate max-w-[160px] sm:max-w-none">
+                                {report.subject_code}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {report.total}
+                            </TableCell>
+                            <TableCell className="text-center text-emerald-600 font-medium">
+                              {report.present}
+                            </TableCell>
+                            <TableCell className="text-center text-red-600 font-medium">
+                              {report.absent}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge
+                                variant={
+                                  report.attendance_rate >= 90
+                                    ? "success"
+                                    : report.attendance_rate >= 80
+                                    ? "warning"
+                                    : "destructive"
+                                }
+                              >
+                                {report.attendance_rate.toFixed(1)}%
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* ── Pagination ── */}
+                <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground text-center sm:text-left">
+                    Showing {sessionReports.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
+                    {Math.min(currentPage * pageSize, pagination.total_count)} of {pagination.total_count} records
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap sm:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {getVisiblePages().map((page, i) =>
+                      page === "ellipsis" ? (
+                        <span
+                          key={`ellipsis-${i}`}
+                          className="px-1 text-sm text-muted-foreground select-none"
                         >
-                          {r.rate}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-3.5 w-3.5" />
+                          …
+                        </span>
+                      ) : (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                      )
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.min(pagination.total_pages, currentPage + 1))}
+                      disabled={currentPage === pagination.total_pages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* ── Summary Stats Row ── */}
+        {!isLoading && sessionReports.length > 0 && (
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Marked</p>
+                  <p className="text-xl font-bold mt-1 sm:text-2xl">
+                    {summaryStats.total_present + summaryStats.total_absent}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Overall Present</p>
+                  <p className="text-xl font-bold text-emerald-600 mt-1 sm:text-2xl">
+                    {summaryStats.total_present}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Overall Absent</p>
+                  <p className="text-xl font-bold text-red-600 mt-1 sm:text-2xl">
+                    {summaryStats.total_absent}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Worst Rate</p>
+                  <p className="text-xl font-bold text-yellow-600 mt-1 sm:text-2xl">
+                    {summaryStats.worst_rate.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

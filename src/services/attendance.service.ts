@@ -127,3 +127,163 @@ export const endAttendanceSessionFn = async (
   );
   return (response.data as any)?.data || response.data;
 };
+
+
+/**
+ * Get filtered attendance records for reports (teacher only).
+ * Supports date range, status, search, sort, and pagination filtering.
+ */
+export interface AttendanceReportParams {
+  startDate?: string;      // YYYY-MM-DD
+  endDate?: string;        // YYYY-MM-DD
+  status?: 'PRESENT' | 'ABSENT';
+  search?: string;         // Student name/roll number
+  sortBy?: 'date' | 'class' | 'rate' | 'present';
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AttendanceReportResponse {
+  summary: {
+    total_sessions: number;
+    average_rate: number;
+    best_rate: number;
+    worst_rate: number;
+    total_present: number;
+    total_absent: number;
+  };
+  pagination: {
+    current_page: number;
+    page_size: number;
+    total_count: number;
+    total_pages: number;
+  };
+  sessions: Array<{
+    session_id: string;
+    class_name: string;
+    subject_code: string;
+    date: string;
+    total: number;
+    present: number;
+    absent: number;
+    attendance_rate: number;
+  }>;
+}
+
+export const getAttendanceReportsFn = async (
+  params: AttendanceReportParams
+): Promise<AttendanceReportResponse> => {
+  const queryParams: any = {};
+
+  if (params.startDate) {
+    queryParams.start_date = params.startDate;
+  }
+  if (params.endDate) {
+    queryParams.end_date = params.endDate;
+  }
+  if (params.status) {
+    queryParams.status = params.status;
+  }
+  if (params.search) {
+    queryParams.search = params.search;
+  }
+  if (params.sortBy) {
+    queryParams.sort_by = params.sortBy;
+  }
+  if (params.sortOrder) {
+    queryParams.sort_order = params.sortOrder;
+  }
+  if (params.page) {
+    queryParams.page = params.page;
+  }
+  if (params.pageSize) {
+    queryParams.page_size = params.pageSize;
+  }
+
+  const response = await apiClient.get<AttendanceReportResponse>('/attendance/reports/', {
+    params: queryParams,
+  });
+  return (response.data as any)?.data || response.data;
+};
+
+/**
+ * Export attendance data as Excel from backend
+ */
+export const exportAttendanceExcelFn = async (params: AttendanceReportParams): Promise<Blob> => {
+  const queryParams: any = {};
+
+  if (params.startDate) {
+    queryParams.start_date = params.startDate;
+  }
+  if (params.endDate) {
+    queryParams.end_date = params.endDate;
+  }
+  if (params.status) {
+    queryParams.status = params.status;
+  }
+  if (params.search) {
+    queryParams.search = params.search;
+  }
+
+  const response = await apiClient.get('/attendance/export_excel/', {
+    params: queryParams,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+/**
+ * Export attendance data as CSV (frontend fallback)
+ */
+export const exportAttendanceToCSV = (data: AttendanceRead[]): void => {
+  if (data.length === 0) {
+    console.warn('No data to export');
+    return;
+  }
+
+  // CSV Headers
+  const headers = ['Date', 'Class', 'Student Name', 'Roll Number', 'Status', 'Confidence', 'Marked At'];
+  
+  // CSV Rows
+  const rows = data.map((record) => {
+    const date = new Date(record.marked_at).toISOString().split('T')[0];
+    const time = new Date(record.marked_at).toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+    const confidence = record.verification_log 
+      ? (record.verification_log.face_confidence * 100).toFixed(0)
+      : 'N/A';
+    
+    return [
+      date,
+      record.class_session_detail?.class_name || record.class_session,
+      record.student_detail?.name || record.student,
+      record.student_detail?.roll_number || 'N/A',
+      record.status,
+      confidence,
+      time,
+    ];
+  });
+
+  // Combine headers and rows
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+  ].join('\n');
+
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
