@@ -91,6 +91,8 @@ export default function StudentManagementPage() {
   });
 
   const [capturedPhotos, setCapturedPhotos] = React.useState<File[]>([]);
+  const [photoMode, setPhotoMode] = React.useState<"upload" | "camera">("upload");
+  const [cameraFacingMode, setCameraFacingMode] = React.useState<"user" | "environment">("user");
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const [isCameraOpen, setIsCameraOpen] = React.useState(false);
@@ -109,7 +111,9 @@ export default function StudentManagementPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: cameraFacingMode, width: 1280, height: 720 } 
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -117,6 +121,7 @@ export default function StudentManagementPage() {
       }
     } catch (error) {
       console.error("Error accessing camera:", error);
+      toast.error("Could not access camera. Please check permissions.");
     }
   };
 
@@ -129,6 +134,11 @@ export default function StudentManagementPage() {
       videoRef.current.srcObject = null;
     }
     setIsCameraOpen(false);
+  };
+
+  const handleSwitchPhotoMode = (mode: "upload" | "camera") => {
+    stopCamera();
+    setPhotoMode(mode);
   };
 
   const captureImage = async () => {
@@ -454,58 +464,91 @@ export default function StudentManagementPage() {
                           and lighting.
                         </p>
 
-                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                        {/* Toggle Buttons */}
+                        <div className="mt-4 flex gap-2 border-b border-border">
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchPhotoMode("upload")}
+                            className={`pb-2 px-1 text-sm font-medium transition-colors ${
+                              photoMode === "upload"
+                                ? "border-b-2 border-primary text-primary"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <ImagePlus className="inline h-4 w-4 mr-1" />
+                            Upload Images
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchPhotoMode("camera")}
+                            className={`pb-2 px-1 text-sm font-medium transition-colors ${
+                              photoMode === "camera"
+                                ? "border-b-2 border-primary text-primary"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <Camera className="inline h-4 w-4 mr-1" />
+                            Capture from Camera
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-4">
                           {/* Upload */}
-                          <div className="rounded-2xl border border-border bg-background p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-foreground">
-                                  Upload Images
-                                </p>
+                          {photoMode === "upload" && (
+                            <div className="rounded-2xl border border-border bg-background p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    Upload Images
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Multiple images supported (JPG/PNG).
+                                  </p>
+                                </div>
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                  <ImagePlus className="h-5 w-5" />
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-2">
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  onChange={(e) => {
+                                    if (e.target.files) {
+                                      const filesArray = Array.from(e.target.files);
+                                      setCapturedPhotos((prev) => [...prev, ...filesArray].slice(0, 5));
+                                    }
+                                  }}
+                                />
                                 <p className="text-xs text-muted-foreground">
-                                  Multiple images supported (JPG/PNG).
+                                  {capturedPhotos.length}/5 images selected.
                                 </p>
                               </div>
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                <ImagePlus className="h-5 w-5" />
-                              </div>
                             </div>
+                          )}
 
-                            <div className="mt-4 space-y-2">
-                              <Input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) => {
-                                  if (e.target.files) {
-                                    const filesArray = Array.from(e.target.files);
-                                    setCapturedPhotos((prev) => [...prev, ...filesArray].slice(0, 5));
-                                  }
-                                }}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                {capturedPhotos.length}/5 images selected.
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Camera Capture (UI placeholder) */}
-                          <div className="rounded-2xl border border-border bg-background p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-foreground">
-                                  Camera Capture
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Capture multiple frames (UI only).
-                                </p>
+                          {/* Camera Capture */}
+                          {photoMode === "camera" && (
+                            <div className="rounded-2xl border border-border bg-background p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    Capture from Camera
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {capturedPhotos.length > 0
+                                      ? `${capturedPhotos.length}/5 frames captured`
+                                      : "Capture frames live from your camera"}
+                                  </p>
+                                </div>
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                  <Camera className="h-5 w-5" />
+                                </div>
                               </div>
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                <Camera className="h-5 w-5" />
-                              </div>
-                            </div>
 
-                            <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
+                              <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
                               <div className="relative aspect-video w-full rounded-lg bg-black overflow-hidden">
                                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                                 {isCapturing && (
@@ -516,18 +559,44 @@ export default function StudentManagementPage() {
                               </div>
                               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                 {!isCameraOpen ? (
-                                  <Button type="button" variant="outline" size="sm" onClick={startCamera}>
+                                  <Button type="button" size="sm" onClick={startCamera} className="flex-1">
+                                    <Camera className="h-4 w-4 mr-2 fill-current" />
                                     Start Camera
                                   </Button>
                                 ) : (
-                                  <Button type="button" variant="outline" size="sm" onClick={stopCamera}>
-                                    Stop Camera
-                                  </Button>
+                                  <>
+                                    <Button type="button" size="sm" onClick={captureImage} disabled={isCapturing || capturedPhotos.length >= 5} className="flex-1">
+                                      <Camera className="h-4 w-4 mr-2" />
+                                      Capture Frame
+                                    </Button>
+                                    <Button type="button" variant="outline" size="sm" onClick={stopCamera}>
+                                      Stop
+                                    </Button>
+                                  </>
                                 )}
-                                <Button type="button" size="sm" onClick={captureImage} disabled={!isCameraOpen || isCapturing || capturedPhotos.length >= 5}>
-                                  Capture Image ({capturedPhotos.length}/5)
-                                </Button>
                               </div>
+                              {!isCameraOpen && (
+                                <div className="mt-2 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    variant={cameraFacingMode === "user" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setCameraFacingMode("user")}
+                                    className="flex-1"
+                                  >
+                                    🤳 Front Camera
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant={cameraFacingMode === "environment" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setCameraFacingMode("environment")}
+                                    className="flex-1"
+                                  >
+                                    📸 Back Camera
+                                  </Button>
+                                </div>
+                              )}
                               {capturedPhotos.length > 0 && (
                                 <div className="mt-4 flex gap-2 overflow-x-auto">
                                   {capturedPhotos.map((photo, i) => (
@@ -541,10 +610,11 @@ export default function StudentManagementPage() {
                                 </div>
                               )}
                               <p className="mt-2 text-xs text-muted-foreground">
-                                Capture exactly 5 frames before saving. (Currently {capturedPhotos.length}/5)
+                                Capture exactly 5 frames. {capturedPhotos.length}/5 frames ready.
                               </p>
                             </div>
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

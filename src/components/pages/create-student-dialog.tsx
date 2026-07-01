@@ -13,7 +13,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ImagePlus, Camera } from "lucide-react";
+import { Plus, ChevronDown, ImagePlus, Camera, Play, Square, X } from "lucide-react";
+import { toast } from "sonner";
 
 const departments = [
   "Computer Science",
@@ -28,8 +29,79 @@ const subjects = ["CS101", "CS201", "CS401", "MATH201", "PHY301", "ENG102"];
 export function CreateStudentDialog() {
   const [open, setOpen] = React.useState(false);
 
+  // Camera state
+  const [cameraMode, setCameraMode] = React.useState<"upload" | "camera">("upload");
+  const [isCameraActive, setIsCameraActive] = React.useState(false);
+  const [capturedFrames, setCapturedFrames] = React.useState<string[]>([]);
+  
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: 1280, height: 720 },
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setIsCameraActive(true);
+      }
+    } catch (error) {
+      console.error("Error accessing camera:", error);
+      toast.error("Could not access camera. Please check permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const captureFrame = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+
+    ctx.drawImage(videoRef.current, 0, 0);
+    const frameData = canvasRef.current.toDataURL("image/jpeg", 0.85);
+    
+    setCapturedFrames((prev) => [...prev, frameData]);
+    toast.success(`Frame ${capturedFrames.length + 1} captured`);
+  };
+
+  const removeFrame = (index: number) => {
+    setCapturedFrames((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSwitchMode = (mode: "upload" | "camera") => {
+    stopCamera();
+    setCameraMode(mode);
+    setCapturedFrames([]);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      stopCamera();
+      setCameraMode("upload");
+      setCapturedFrames([]);
+    }
+    setOpen(open);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="h-4 w-4" />
@@ -40,7 +112,27 @@ export function CreateStudentDialog() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            
+            // Validate that user provided face images
+            const uploadedFiles = (e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement)?.files;
+            const hasUploadedImages = uploadedFiles && uploadedFiles.length > 0;
+            const hasCapturedFrames = cameraMode === "camera" && capturedFrames.length >= 3;
+            
+            if (!hasUploadedImages && !hasCapturedFrames) {
+              toast.error(`Please ${cameraMode === "upload" ? "upload at least 3 images" : "capture at least 3 frames"}`);
+              return;
+            }
+
+            if (cameraMode === "camera" && capturedFrames.length < 3) {
+              toast.error(`Capture at least ${3 - capturedFrames.length} more frame(s)`);
+              return;
+            }
+
+            toast.success("Student created successfully!");
             setOpen(false);
+            stopCamera();
+            setCameraMode("upload");
+            setCapturedFrames([]);
           }}
         >
           <DialogHeader>
@@ -187,9 +279,37 @@ export function CreateStudentDialog() {
                 and lighting.
               </p>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {/* Upload */}
-                <div className="rounded-2xl border border-border bg-background p-4">
+              {/* Toggle Buttons */}
+              <div className="mt-4 flex gap-2 border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode("upload")}
+                  className={`pb-2 px-1 text-sm font-medium transition-colors ${
+                    cameraMode === "upload"
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ImagePlus className="inline h-4 w-4 mr-1" />
+                  Upload Images
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode("camera")}
+                  className={`pb-2 px-1 text-sm font-medium transition-colors ${
+                    cameraMode === "camera"
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Camera className="inline h-4 w-4 mr-1" />
+                  Capture from Camera
+                </button>
+              </div>
+
+              {/* Upload Mode */}
+              {cameraMode === "upload" && (
+                <div className="mt-4 rounded-2xl border border-border bg-background p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">
@@ -209,23 +329,27 @@ export function CreateStudentDialog() {
                       type="file"
                       accept="image/*"
                       multiple
-                      required
+                      required={cameraMode === "upload"}
                     />
                     <p className="text-xs text-muted-foreground">
                       Minimum: 3 images. Recommended: 5+ images.
                     </p>
                   </div>
                 </div>
+              )}
 
-                {/* Camera Capture (UI placeholder) */}
-                <div className="rounded-2xl border border-border bg-background p-4">
+              {/* Camera Capture Mode */}
+              {cameraMode === "camera" && (
+                <div className="mt-4 rounded-2xl border border-border bg-background p-4 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">
-                        Camera Capture
+                        Capture from Camera
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Capture multiple frames (UI only).
+                        {capturedFrames.length > 0
+                          ? `${capturedFrames.length} frame(s) captured`
+                          : "Start camera and capture frames"}
                       </p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -233,22 +357,107 @@ export function CreateStudentDialog() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
-                    <div className="aspect-video w-full rounded-lg bg-muted/50" />
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <Button type="button" variant="outline" size="sm">
+                  {/* Video Preview */}
+                  <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-950 relative">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    {!isCameraActive && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 text-white/60">
+                        <div className="text-center">
+                          <Camera className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Camera is offline</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hidden Canvas for capturing */}
+                  <canvas ref={canvasRef} className="hidden" />
+
+                  {/* Camera Controls */}
+                  <div className="flex gap-2">
+                    {!isCameraActive ? (
+                      <Button
+                        type="button"
+                        onClick={startCamera}
+                        className="flex-1"
+                        size="sm"
+                      >
+                        <Play className="h-4 w-4 mr-2 fill-current" />
                         Start Camera
                       </Button>
-                      <Button type="button" size="sm">
-                        Capture Frame
-                      </Button>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Capture at least 3–5 frames before saving.
-                    </p>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={captureFrame}
+                          className="flex-1"
+                          size="sm"
+                        >
+                          <Camera className="h-4 w-4 mr-2" />
+                          Capture Frame
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={stopCamera}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Square className="h-4 w-4 fill-current" />
+                        </Button>
+                      </>
+                    )}
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Capture at least 3–5 frames with different angles and lighting.
+                  </p>
+
+                  {/* Captured Frames Grid */}
+                  {capturedFrames.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        Captured Frames
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                        {capturedFrames.map((frame, idx) => (
+                          <div key={idx} className="relative group">
+                            <img
+                              src={frame}
+                              alt={`Captured frame ${idx + 1}`}
+                              className="w-full h-20 object-cover rounded-lg border border-border"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFrame(idx)}
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                            <div className="absolute inset-0 rounded-lg bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Click X to remove a frame.
+                      </p>
+                    </div>
+                  )}
+
+                  {capturedFrames.length < 3 && capturedFrames.length > 0 && (
+                    <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        ⚠️ Capture at least {3 - capturedFrames.length} more frame(s) for better recognition.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
