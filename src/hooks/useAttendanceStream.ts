@@ -63,10 +63,11 @@ export const useAttendanceStream = ({
     wsRef.current = ws;
 
     // ── Stale-faces watchdog ────────────────────────────────────────────────
-    // If the backend goes silent (busy processing, Render cold-start, etc.) for
-    // more than FACE_STALE_MS milliseconds, clear the face boxes so the user
-    // doesn't see a permanently-green box after stepping out of frame.
-    const FACE_STALE_MS = 2000;
+    // If the backend goes silent (busy processing, ML service cold-start, etc.) for
+    // longer than FACE_STALE_MS milliseconds, clear the face boxes.
+    // Set to 3 seconds — allows one frame timeout (8s backend) but should rarely trigger
+    // since we now return empty detections on timeout instead of dropping frames.
+    const FACE_STALE_MS = 3000;
     let staleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const resetStaleTimer = () => {

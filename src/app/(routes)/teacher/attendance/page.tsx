@@ -142,6 +142,15 @@ export default function TeacherAttendancePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // ── Initialize canvas size ONCE before animation loop ──────────────
+    const initializeCanvas = () => {
+      const { width, height } = video.getBoundingClientRect();
+      canvas.width = width;
+      canvas.height = height;
+    };
+
+    initializeCanvas();
+
     let animId: number;
 
     const draw = () => {
@@ -149,18 +158,12 @@ export default function TeacherAttendancePage() {
 
       const faces = facesRef.current;
 
-      // Sync canvas logical size to the video's displayed size
-      const { width, height } = video.getBoundingClientRect();
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (!isCameraActive || faces.length === 0) return;
 
-      // Video stream size vs canvas size ratio (frames are sent at 480×360)
+      // Video is captured at 480×360, canvas displays at full size
+      // Use canvas dimensions for scaling (they match video display size)
       const scaleX = canvas.width / 480;
       const scaleY = canvas.height / 360;
 
@@ -179,40 +182,51 @@ export default function TeacherAttendancePage() {
 
         // Glowing box
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 8;
         ctx.strokeRect(x, y, w, h);
         ctx.shadowBlur = 0;
 
         // Translucent fill
-        ctx.fillStyle = color + "15"; // Very light fill
+        ctx.fillStyle = color + "10"; // Very light fill
         ctx.fillRect(x, y, w, h);
 
-        // Label
-        const label =
-          face.status === "identified" && face.student_id
-            ? "IDENTIFIED"
-            : face.status === "ambiguous"
-            ? "AMBIGUOUS"
-            : "UNKNOWN";
+        // Label - show student name if identified, otherwise status
+        let label = "UNKNOWN";
+        if (face.status === "identified") {
+          label = face.student_name || "IDENTIFIED";
+        } else if (face.status === "ambiguous") {
+          label = "AMBIGUOUS";
+        }
 
-        const fontSize = Math.max(10, Math.round(w * 0.1));
-        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        const fontSize = Math.max(8, Math.round(w * 0.08));
+        ctx.font = `500 ${fontSize}px Inter, sans-serif`;
         const textW = ctx.measureText(label).width;
-        const labelH = fontSize + 6;
+        const labelH = fontSize + 4;
         const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
 
         ctx.fillStyle = color;
-        ctx.fillRect(x, labelY, textW + 12, labelH);
+        ctx.fillRect(x, labelY, textW + 8, labelH);
 
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(label, x + 6, labelY + fontSize - 1);
+        ctx.fillText(label, x + 4, labelY + fontSize - 2);
       });
     };
 
     draw();
-    return () => cancelAnimationFrame(animId);
+
+    // ── Resize listener (only resize canvas when window resizes) ────────────
+    const handleResize = () => {
+      initializeCanvas();
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", handleResize);
+    };
   }, [isCameraActive]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -312,7 +326,11 @@ export default function TeacherAttendancePage() {
         setSessionState("ended");
         stopCamera();
         if (timerRef.current) clearInterval(timerRef.current);
-        toast.success(`Session ended! ${response.summary.present} present, ${response.summary.absent} absent (${response.summary.attendance_rate.toFixed(1)}%)`);
+        if (response?.summary) {
+          toast.success(`Session ended! ${response.summary.present} present, ${response.summary.absent} absent (${response.summary.attendance_rate.toFixed(1)}%)`);
+        } else {
+          toast.success("Session ended!");
+        }
       },
       onError: (err) => {
         toast.error(err.message || "Failed to end session");

@@ -159,6 +159,7 @@ export interface FaceOverlay {
   h: number;
   status: 'identified' | 'unknown' | 'ambiguous';
   student_id: string | null;
+  student_name?: string; // Optional name of identified student
   confidence: number;
 }
 

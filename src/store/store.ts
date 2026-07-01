@@ -1,8 +1,19 @@
 import { configureStore } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
+
+// Placeholder slice to fix the empty reducer error
+const appSlice = createSlice({
+  name: 'app',
+  initialState: {
+    initialized: true,
+  },
+  reducers: {},
+});
 
 export const store = configureStore({
   reducer: {
-    // Add your reducers here
+    app: appSlice.reducer,
+    // Add more reducers here as needed
   },
 });
 
