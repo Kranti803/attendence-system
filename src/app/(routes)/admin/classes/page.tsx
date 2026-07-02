@@ -49,7 +49,6 @@ import {
 import { useSubjects } from "@/hooks/useSubject";
 import { ClassSession } from "@/types/classSession";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
 const formatTime = (t: string) => {
   if (!t) return "—";
   const [h, m] = t.split(":");
@@ -67,30 +66,31 @@ const EMPTY_FORM = {
 };
 
 export default function AdminClassesPage() {
-  // ── modal state ──────────────────────────────────────────────────────────
   const [open, setOpen] = React.useState(false);
-  const [editingSession, setEditingSession] = React.useState<ClassSession | null>(null);
+  const [editingSession, setEditingSession] =
+    React.useState<ClassSession | null>(null);
 
-  // ── delete confirm state ─────────────────────────────────────────────────
-  const [deleteTarget, setDeleteTarget] = React.useState<ClassSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<ClassSession | null>(
+    null,
+  );
 
-  // ── search & filter states ───────────────────────────────────────────────
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [sortBy, setSortBy] = React.useState('date');
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [sortBy, setSortBy] = React.useState("date");
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 10;
 
-  // ── form state ────────────────────────────────────────────────────────────
   const [formData, setFormData] = React.useState(EMPTY_FORM);
 
-  // ── data / mutations ──────────────────────────────────────────────────────
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
-  const { mutate: createSession, isPending: isCreating } = useCreateClassSession();
-  const { mutate: updateSession, isPending: isUpdating } = useUpdateClassSession();
-  const { mutate: deleteSession, isPending: isDeleting } = useDeleteClassSession();
-  const { mutate: exportExcel, isPending: isExporting } = useExportClassSessionsExcel();
-  
-  // Use filtered query with backend parameters
+  const { mutate: createSession, isPending: isCreating } =
+    useCreateClassSession();
+  const { mutate: updateSession, isPending: isUpdating } =
+    useUpdateClassSession();
+  const { mutate: deleteSession, isPending: isDeleting } =
+    useDeleteClassSession();
+  const { mutate: exportExcel, isPending: isExporting } =
+    useExportClassSessionsExcel();
+
   const { data: sessionsData, isLoading } = useClassSessionsWithFilters({
     search: searchTerm || undefined,
     page: currentPage,
@@ -105,31 +105,34 @@ export default function AdminClassesPage() {
   const isPending = isCreating || isUpdating;
 
   const handleExportExcel = () => {
-    exportExcel({
-      search: searchTerm || undefined,
-      ordering: sortBy,
-    }, {
-      onSuccess: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `classes_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        toast.success('Classes exported successfully');
+    exportExcel(
+      {
+        search: searchTerm || undefined,
+        ordering: sortBy,
       },
-      onError: (error) => {
-        toast.error('Failed to export classes');
-        console.error('Export error:', error);
+      {
+        onSuccess: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `classes_${new Date().toISOString().split("T")[0]}.xlsx`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          toast.success("Classes exported successfully");
+        },
+        onError: (error) => {
+          toast.error("Failed to export classes");
+          console.error("Export error:", error);
+        },
       },
-    });
+    );
   };
 
   const handleClearFilters = () => {
-    setSearchTerm('');
-    setSortBy('date');
+    setSearchTerm("");
+    setSortBy("date");
     setCurrentPage(1);
   };
 
@@ -137,7 +140,7 @@ export default function AdminClassesPage() {
     if (sortBy === column) {
       setSortBy(`-${column}`);
     } else if (sortBy === `-${column}`) {
-      setSortBy('date');
+      setSortBy("date");
     } else {
       setSortBy(column);
     }
@@ -166,7 +169,7 @@ export default function AdminClassesPage() {
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -192,7 +195,7 @@ export default function AdminClassesPage() {
             toast.success("Class session updated successfully");
           },
           onError: (err) => toast.error(err.message),
-        }
+        },
       );
     } else {
       createSession(payload, {
@@ -217,27 +220,10 @@ export default function AdminClassesPage() {
     });
   };
 
-  // ── subject name lookup ───────────────────────────────────────────────────
-  const subjectName = (id: string) => {
-    const s = subjects.find((s) => s.id === id);
-    return s ? `${s.name} (${s.code})` : id;
-  };
-
-  // ── filtered list ─────────────────────────────────────────────────────────
-  const filtered = sessions.filter((s) => {
-    const q = search.toLowerCase();
-    return (
-      s.class_name.toLowerCase().includes(q) ||
-      subjectName(s.subject).toLowerCase().includes(q) ||
-      s.date.includes(q)
-    );
-  });
-
   return (
     <>
       <TopNavbar title="Classes" userInitials="AU" />
       <div className="p-6 space-y-6">
-
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -247,14 +233,18 @@ export default function AdminClassesPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={handleExportExcel}
               disabled={isExporting}
             >
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
-              {isExporting ? 'Exporting...' : 'Export'}
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {isExporting ? "Exporting..." : "Export"}
             </Button>
 
             {/* ── Create / Edit Dialog ───────────────────────────────────── */}
@@ -276,20 +266,26 @@ export default function AdminClassesPage() {
                 <form onSubmit={handleSubmit}>
                   <DialogHeader>
                     <DialogTitle>
-                      {editingSession ? "Edit Class Session" : "Create Class Session"}
+                      {editingSession
+                        ? "Edit Class Session"
+                        : "Create Class Session"}
                     </DialogTitle>
                     <DialogDescription>
                       {editingSession
                         ? "Update the session details below."
                         : "Define a specific class session where attendance will be taken."}{" "}
-                      Fields marked <span className="font-medium text-foreground">*</span> are required.
+                      Fields marked{" "}
+                      <span className="font-medium text-foreground">*</span> are
+                      required.
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className="mt-5 grid gap-6">
                     {/* Core Info */}
                     <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">Core Info</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        Core Info
+                      </p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
                           <label className="text-sm font-medium text-foreground">
@@ -318,7 +314,9 @@ export default function AdminClassesPage() {
                               className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
                             >
                               <option value="" disabled>
-                                {isLoadingSubjects ? "Loading subjects…" : "Select subject…"}
+                                {isLoadingSubjects
+                                  ? "Loading subjects…"
+                                  : "Select subject…"}
                               </option>
                               {subjects.map((s) => (
                                 <option key={s.id} value={s.id}>
@@ -334,7 +332,9 @@ export default function AdminClassesPage() {
 
                     {/* Schedule Info */}
                     <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">Schedule</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        Schedule
+                      </p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-3">
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
@@ -350,7 +350,8 @@ export default function AdminClassesPage() {
                         </div>
                         <div className="space-y-2 sm:col-span-1">
                           <label className="text-sm font-medium text-foreground">
-                            Start Time <span className="text-destructive">*</span>
+                            Start Time{" "}
+                            <span className="text-destructive">*</span>
                           </label>
                           <Input
                             name="start_time"
@@ -383,7 +384,9 @@ export default function AdminClassesPage() {
                       </Button>
                     </DialogClose>
                     <Button type="submit" disabled={isPending}>
-                      {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
                       {editingSession ? "Save Changes" : "Create Session"}
                     </Button>
                   </DialogFooter>
@@ -409,8 +412,12 @@ export default function AdminClassesPage() {
                   }}
                 />
               </div>
-              {(searchTerm || sortBy !== 'date') && (
-                <Button variant="outline" size="sm" onClick={handleClearFilters}>
+              {(searchTerm || sortBy !== "date") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearFilters}
+                >
                   Clear Filters
                 </Button>
               )}
@@ -430,23 +437,25 @@ export default function AdminClassesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:text-foreground"
-                    onClick={() => handleSort('class_name')}
+                    onClick={() => handleSort("class_name")}
                   >
-                    Class {sortBy === 'class_name' && '↑'} {sortBy === '-class_name' && '↓'}
+                    Class {sortBy === "class_name" && "↑"}{" "}
+                    {sortBy === "-class_name" && "↓"}
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:text-foreground"
-                    onClick={() => handleSort('subject')}
+                    onClick={() => handleSort("subject")}
                   >
-                    Subject {sortBy === 'subject' && '↑'} {sortBy === '-subject' && '↓'}
+                    Subject {sortBy === "subject" && "↑"}{" "}
+                    {sortBy === "-subject" && "↓"}
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:text-foreground"
-                    onClick={() => handleSort('date')}
+                    onClick={() => handleSort("date")}
                   >
-                    Date {sortBy === 'date' && '↑'} {sortBy === '-date' && '↓'}
+                    Date {sortBy === "date" && "↑"} {sortBy === "-date" && "↓"}
                   </TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Teacher</TableHead>
@@ -459,14 +468,18 @@ export default function AdminClassesPage() {
                     <TableCell colSpan={6} className="h-24 text-center">
                       <div className="flex items-center justify-center">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
-                        <span className="text-muted-foreground">Loading sessions...</span>
+                        <span className="text-muted-foreground">
+                          Loading sessions...
+                        </span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : sessions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-24 text-center">
-                      <p className="text-muted-foreground">No class sessions found.</p>
+                      <p className="text-muted-foreground">
+                        No class sessions found.
+                      </p>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -488,10 +501,12 @@ export default function AdminClassesPage() {
                       <TableCell>
                         <div>
                           <p className="text-sm text-foreground">
-                            {subjects.find((s) => s.id === session.subject)?.name ?? "—"}
+                            {subjects.find((s) => s.id === session.subject)
+                              ?.name ?? "—"}
                           </p>
                           <p className="text-xs text-muted-foreground font-mono">
-                            {subjects.find((s) => s.id === session.subject)?.code ?? ""}
+                            {subjects.find((s) => s.id === session.subject)
+                              ?.code ?? ""}
                           </p>
                         </div>
                       </TableCell>
@@ -510,16 +525,21 @@ export default function AdminClassesPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
-                          {formatTime(session.start_time)} — {formatTime(session.end_time)}
+                          {formatTime(session.start_time)} —{" "}
+                          {formatTime(session.end_time)}
                         </div>
                       </TableCell>
 
                       {/* Teacher */}
                       <TableCell>
                         <div className="text-sm">
-                          <p className="text-foreground">{session.teacher_name || "—"}</p>
+                          <p className="text-foreground">
+                            {session.teacher_name || "—"}
+                          </p>
                           {session.teacher_email && (
-                            <p className="text-xs text-muted-foreground">{session.teacher_email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {session.teacher_email}
+                            </p>
                           )}
                         </div>
                       </TableCell>
@@ -561,7 +581,7 @@ export default function AdminClassesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1 || isLoading}
                   >
                     Previous
@@ -569,7 +589,9 @@ export default function AdminClassesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage === totalPages || isLoading}
                   >
                     Next
