@@ -1,5 +1,14 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { createEnrollmentFn, getAllEnrollmentsFn, updateEnrollmentFn, deleteEnrollmentFn } from '@/services/enrollment.service';
+import { 
+  createEnrollmentFn, 
+  getAllEnrollmentsFn, 
+  getEnrollmentsWithFiltersFn,
+  updateEnrollmentFn, 
+  deleteEnrollmentFn,
+  exportEnrollmentsExcelFn,
+  GetEnrollmentsParams,
+  PaginatedResponse,
+} from '@/services/enrollment.service';
 import { CreateEnrollmentPayload, UpdateEnrollmentPayload, Enrollment } from '@/types/enrollment';
 
 export const useCreateEnrollment = () => {
@@ -17,6 +26,13 @@ export const useEnrollments = () => {
   return useQuery<Enrollment[], Error>({
     queryKey: ['enrollments'],
     queryFn: getAllEnrollmentsFn,
+  });
+};
+
+export const useEnrollmentsWithFilters = (params: GetEnrollmentsParams) => {
+  return useQuery<PaginatedResponse<Enrollment>, Error>({
+    queryKey: ['enrollments', params],
+    queryFn: () => getEnrollmentsWithFiltersFn(params),
   });
 };
 
@@ -39,5 +55,11 @@ export const useDeleteEnrollment = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['enrollments'] });
     },
+  });
+};
+
+export const useExportEnrollmentsExcel = () => {
+  return useMutation<Blob, Error, GetEnrollmentsParams>({
+    mutationFn: exportEnrollmentsExcelFn,
   });
 };

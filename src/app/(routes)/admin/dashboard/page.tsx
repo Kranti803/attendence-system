@@ -230,11 +230,16 @@ export default function AdminDashboardPage() {
         // Single API call to backend for ALL stats
         const dashboardStats = await getDashboardStatsFn();
 
+        // Safety check
+        if (!dashboardStats) {
+          throw new Error('No data received from dashboard API');
+        }
+
         // Update stats cards
         const updatedStats: StatConfig[] = [
           {
             label: "Total Students",
-            value: dashboardStats.totalStudents.toLocaleString(),
+            value: (dashboardStats.totalStudents || 0).toLocaleString(),
             change: "+12%",
             trend: "up",
             icon: <Users className="h-5 w-5" />,
@@ -242,7 +247,7 @@ export default function AdminDashboardPage() {
           },
           {
             label: "Total Teachers",
-            value: dashboardStats.totalTeachers.toLocaleString(),
+            value: (dashboardStats.totalTeachers || 0).toLocaleString(),
             change: "+3%",
             trend: "up",
             icon: <GraduationCap className="h-5 w-5" />,
@@ -250,7 +255,7 @@ export default function AdminDashboardPage() {
           },
           {
             label: "Total Classes",
-            value: dashboardStats.totalClasses.toLocaleString(),
+            value: (dashboardStats.totalClasses || 0).toLocaleString(),
             change: "0%",
             trend: "neutral",
             icon: <BookOpen className="h-5 w-5" />,
@@ -258,7 +263,7 @@ export default function AdminDashboardPage() {
           },
           {
             label: "Today's Attendance",
-            value: `${dashboardStats.todayAttendanceRate}%`,
+            value: `${dashboardStats.todayAttendanceRate || 0}%`,
             change: "+2.1%",
             trend: "up",
             icon: <TrendingUp className="h-5 w-5" />,
@@ -269,8 +274,8 @@ export default function AdminDashboardPage() {
         setStats(updatedStats);
         
         // Data is already formatted from backend, just use it directly
-        setRecentActivity(dashboardStats.recentActivity);
-        setWeeklyTrend(dashboardStats.weeklyAttendance);
+        setRecentActivity(dashboardStats.recentActivity || []);
+        setWeeklyTrend(dashboardStats.weeklyAttendance || []);
       } catch (err) {
         console.error("Dashboard error:", err);
         setError("Failed to load dashboard data");

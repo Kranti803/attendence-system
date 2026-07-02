@@ -3,7 +3,11 @@ import {
   createClassSessionFn,
   deleteClassSessionFn,
   getAllClassSessionsFn,
+  getClassSessionsWithFiltersFn,
   updateClassSessionFn,
+  exportClassSessionsExcelFn,
+  GetClassSessionsParams,
+  PaginatedResponse,
 } from '@/services/classSession.service';
 import {
   ClassSession,
@@ -15,6 +19,13 @@ export const useClassSessions = () => {
   return useQuery<ClassSession[], Error>({
     queryKey: ['class-sessions'],
     queryFn: getAllClassSessionsFn,
+  });
+};
+
+export const useClassSessionsWithFilters = (params: GetClassSessionsParams) => {
+  return useQuery<PaginatedResponse<ClassSession>, Error>({
+    queryKey: ['class-sessions', params],
+    queryFn: () => getClassSessionsWithFiltersFn(params),
   });
 };
 
@@ -45,5 +56,11 @@ export const useDeleteClassSession = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['class-sessions'] });
     },
+  });
+};
+
+export const useExportClassSessionsExcel = () => {
+  return useMutation<Blob, Error, GetClassSessionsParams>({
+    mutationFn: exportClassSessionsExcelFn,
   });
 };

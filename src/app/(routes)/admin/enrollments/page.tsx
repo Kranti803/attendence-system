@@ -41,6 +41,8 @@ import {
   useCreateEnrollment,
   useUpdateEnrollment,
   useDeleteEnrollment,
+  useEnrollmentsWithFilters,
+  useExportEnrollmentsExcel,
 } from "@/hooks/useEnrollment";
 import { useStudents } from "@/hooks/useStudent";
 import { useSubjects } from "@/hooks/useSubject";
@@ -55,18 +57,65 @@ export default function EnrollmentsPage() {
   const [open, setOpen] = React.useState(false);
   const [editingEnrollment, setEditingEnrollment] = React.useState<Enrollment | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<Enrollment | null>(null);
-  const [search, setSearch] = React.useState("");
+  
+  // Filter & Search States
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [sortBy, setSortBy] = React.useState('student');
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 10;
+  
   const [formData, setFormData] = React.useState(EMPTY_FORM);
 
-  const { data: enrollments = [], isLoading } = useEnrollments();
   const { data: students = [], isLoading: isLoadingStudents } = useStudents();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
 
   const { mutate: createEnrollment, isPending: isCreating } = useCreateEnrollment();
   const { mutate: updateEnrollment, isPending: isUpdating } = useUpdateEnrollment();
   const { mutate: deleteEnrollment, isPending: isDeleting } = useDeleteEnrollment();
+  const { mutate: exportExcel, isPending: isExporting } = useExportEnrollmentsExcel();
+  
+  // Use filtered query with backend parameters
+  const { data: enrollmentsData, isLoading } = useEnrollmentsWithFilters({
+    search: searchTerm || undefined,
+    page: currentPage,
+    page_size: itemsPerPage,
+    ordering: sortBy,
+  });
+
+  const enrollments = enrollmentsData?.results || [];
+  const totalCount = enrollmentsData?.count || 0;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   const isPending = isCreating || isUpdating;
+
+  const handleExportExcel = () => {
+    exportExcel({
+      search: searchTerm || undefined,
+      ordering: sortBy,
+    }, {
+      onSuccess: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `enrollments_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.success('Enrollments exported successfully');
+      },
+      onError: (error) => {
+        toast.error('Failed to export enrollments');
+        console.error('Export error:', error);
+      },
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSortBy('student');
+    setCurrentPage(1);
+  };
 
   const resetForm = () => setFormData(EMPTY_FORM);
 
@@ -134,23 +183,34 @@ export default function EnrollmentsPage() {
     });
   };
 
-  const studentName = (id: string) => {
-    const s = students.find((st) => st.id === id);
-    return s ? `${s.first_name} ${s.last_name} (${s.roll_number || s.id.substring(0, 4)})` : id;
+  const studentName = (enrollment: Enrollment) => {
+    // Use backend-returned student_name if available, fallback to old method
+    if (enrollment.student_name) {
+      return `${enrollment.student_name} (${enrollment.student_roll_number || 'N/A'})`;
+    }
+    const s = students.find((st) => st.id === enrollment.student);
+    return s ? `${s.first_name} ${s.last_name} (${s.roll_number || s.id.substring(0, 4)})` : enrollment.student;
   };
 
-  const subjectName = (id: string) => {
-    const s = subjects.find((st) => st.id === id);
-    return s ? `${s.name} (${s.code})` : id;
+  const subjectName = (enrollment: Enrollment) => {
+    // Use backend-returned subject_name if available, fallback to old method
+    if (enrollment.subject_name) {
+      return `${enrollment.subject_name} (${enrollment.subject_code || 'N/A'})`;
+    }
+    const s = subjects.find((st) => st.id === enrollment.subject);
+    return s ? `${s.name} (${s.code})` : enrollment.subject;
   };
 
-  const filtered = enrollments.filter((enrol) => {
-    const q = search.toLowerCase();
-    return (
-      studentName(enrol.student).toLowerCase().includes(q) ||
-      subjectName(enrol.subject).toLowerCase().includes(q)
-    );
-  });
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortBy(`-${column}`);
+    } else if (sortBy === `-${column}`) {
+      setSortBy('student');
+    } else {
+      setSortBy(column);
+    }
+    setCurrentPage(1);
+  };
 
   return (
     <>
@@ -165,9 +225,14 @@ export default function EnrollmentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4" />
-              Export
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+              {isExporting ? 'Exporting...' : 'Export'}
             </Button>
             <Dialog
               open={open}
@@ -266,14 +331,24 @@ export default function EnrollmentsPage() {
         {/* Search */}
         <Card>
           <CardContent className="p-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by student or subject name…"
-                className="pl-9 w-full sm:max-w-sm"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by student name, roll number, or subject…"
+                  className="pl-9 w-full"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+              {(searchTerm || sortBy !== 'student') && (
+                <Button variant="outline" size="sm" onClick={handleClearFilters}>
+                  Clear Filters
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -283,16 +358,31 @@ export default function EnrollmentsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Enrollment List</CardTitle>
-              <Badge variant="secondary">{filtered.length} total</Badge>
+              <Badge variant="secondary">{totalCount} total</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Enrolled At</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:text-foreground"
+                    onClick={() => handleSort('student')}
+                  >
+                    Student {sortBy === 'student' && '↑'} {sortBy === '-student' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:text-foreground"
+                    onClick={() => handleSort('subject')}
+                  >
+                    Subject {sortBy === 'subject' && '↑'} {sortBy === '-subject' && '↓'}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:text-foreground"
+                    onClick={() => handleSort('created_at')}
+                  >
+                    Enrolled At {sortBy === 'created_at' && '↑'} {sortBy === '-created_at' && '↓'}
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -306,30 +396,39 @@ export default function EnrollmentsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : filtered.length === 0 ? (
+                ) : enrollments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-24 text-center">
                       <p className="text-muted-foreground">No enrollments found.</p>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((enrol) => (
+                  enrollments.map((enrol) => (
                     <TableRow key={enrol.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                             <BookUser className="h-4 w-4" />
                           </div>
-                          <p className="font-medium text-foreground">
-                            {studentName(enrol.student)}
-                          </p>
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {studentName(enrol)}
+                            </p>
+                            {enrol.student_department && (
+                              <p className="text-xs text-muted-foreground">
+                                {enrol.student_department}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
 
                       <TableCell>
-                        <p className="text-sm text-foreground">
-                          {subjectName(enrol.subject)}
-                        </p>
+                        <div>
+                          <p className="text-sm text-foreground">
+                            {subjectName(enrol)}
+                          </p>
+                        </div>
                       </TableCell>
 
                       <TableCell className="text-sm text-muted-foreground">
@@ -365,6 +464,33 @@ export default function EnrollmentsPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

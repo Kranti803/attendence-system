@@ -7,8 +7,10 @@ export interface ClassSession {
   subject: string;     // UUID
   subject_name?: string;
   subject_code?: string;
-  created_at: string;
-  updated_at: string;
+  teacher_name?: string;
+  teacher_email?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateClassSessionPayload {

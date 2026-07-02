@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   Card,
@@ -9,12 +10,18 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { useAnalyticsOverview } from "@/hooks/useAnalytics";
 
 /* ─── SVG Chart: Attendance Trends (Line) ─── */
-function AttendanceTrendChart() {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-  const values = [87, 91, 85, 93, 89, 94];
+function AttendanceTrendChart({ data }: { data: any[] }) {
+  if (!data || data.length === 0) {
+    return <div className="text-center text-muted-foreground">No data available</div>;
+  }
+
+  // Use last 6 months for chart
+  const chartData = data.slice(-6);
+  const values = chartData.map(d => d.rate);
   const max = 100;
   const h = 220;
   const w = 500;
@@ -32,6 +39,12 @@ function AttendanceTrendChart() {
     .join(" ");
 
   const areaPoints = `${padX},${padY + chartH} ${points} ${padX + chartW},${padY + chartH}`;
+
+  // Format labels - use day of month
+  const labels = chartData.map((d, i) => {
+    const date = new Date(d.date);
+    return date.getDate().toString();
+  });
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
@@ -61,7 +74,7 @@ function AttendanceTrendChart() {
           <g key={i}>
             <circle cx={x} cy={y} r="4" fill="currentColor" stroke="white" strokeWidth="2" />
             <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
-              {months[i]}
+              {labels[i]}
             </text>
           </g>
         );
@@ -71,14 +84,12 @@ function AttendanceTrendChart() {
 }
 
 /* ─── SVG Chart: Department Comparison (Bar) ─── */
-function DepartmentChart() {
-  const departments = [
-    { name: "CS", value: 94 },
-    { name: "Math", value: 88 },
-    { name: "Physics", value: 82 },
-    { name: "Eng", value: 91 },
-    { name: "Bio", value: 86 },
-  ];
+function DepartmentChart({ data }: { data: any[] }) {
+  if (!data || data.length === 0) {
+    return <div className="text-center text-muted-foreground">No data available</div>;
+  }
+
+  const departments = data.slice(0, 5); // Top 5 departments
   const max = 100;
   const h = 220;
   const w = 500;
@@ -103,16 +114,17 @@ function DepartmentChart() {
       })}
       {departments.map((d, i) => {
         const x = padX + gap + i * (barW + gap);
-        const barH = (d.value / max) * chartH;
+        const barH = (d.rate / max) * chartH;
         const y = padY + chartH - barH;
+        const deptName = d.name.substring(0, 3).toUpperCase();
         return (
           <g key={d.name}>
             <rect x={x} y={y} width={barW} height={barH} rx={6} fill="currentColor" opacity={0.75} />
             <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.85" fontWeight="600">
-              {d.value}%
+              {d.rate}%
             </text>
             <text x={x + barW / 2} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
-              {d.name}
+              {deptName}
             </text>
           </g>
         );
@@ -122,8 +134,8 @@ function DepartmentChart() {
 }
 
 /* ─── SVG Chart: Recognition Success Rate (Donut) ─── */
-function RecognitionDonut() {
-  const value = 96.8;
+function RecognitionDonut({ successRate }: { successRate: number }) {
+  const value = successRate || 96.8;
   const radius = 70;
   const stroke = 14;
   const circumference = 2 * Math.PI * radius;
@@ -146,7 +158,7 @@ function RecognitionDonut() {
           transform="rotate(-90 90 90)"
         />
         <text x="90" y="85" textAnchor="middle" fontSize="28" fontWeight="700" fill="currentColor">
-          {value}%
+          {value.toFixed(1)}%
         </text>
         <text x="90" y="105" textAnchor="middle" fontSize="12" fill="currentColor" opacity="0.7">
           Success Rate
@@ -158,6 +170,42 @@ function RecognitionDonut() {
 
 /* ─── Page ─── */
 export default function AnalyticsPage() {
+  const { data: analyticsData, isLoading } = useAnalyticsOverview();
+
+  if (isLoading) {
+    return (
+      <>
+        <TopNavbar title="Analytics" userInitials="AU" />
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">Loading analytics...</p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!analyticsData) {
+    return (
+      <>
+        <TopNavbar title="Analytics" userInitials="AU" />
+        <div className="p-6 space-y-6">
+          <div className="text-center">
+            <p className="text-muted-foreground">Failed to load analytics data</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const recognitionStats = analyticsData.recognitionStats || {};
+  const attendanceTrends = analyticsData.attendanceTrends || [];
+  const departmentComparison = analyticsData.departmentComparison || [];
+  const timeSlotDistribution = analyticsData.timeSlotDistribution || [];
+
   return (
     <>
       <TopNavbar title="Analytics" userInitials="AU" />
@@ -179,8 +227,8 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Successful Recognitions</p>
-                <p className="text-2xl font-bold">12,847</p>
-                <p className="text-xs text-emerald-600 font-medium">96.8% accuracy</p>
+                <p className="text-2xl font-bold">{(recognitionStats.successfulRecognitions || 0).toLocaleString()}</p>
+                <p className="text-xs text-emerald-600 font-medium">{recognitionStats.successRate || 0}% accuracy</p>
               </div>
             </CardContent>
           </Card>
@@ -191,8 +239,12 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Low Confidence</p>
-                <p className="text-2xl font-bold">284</p>
-                <p className="text-xs text-amber-600 font-medium">2.1% of attempts</p>
+                <p className="text-2xl font-bold">{(recognitionStats.lowConfidence || 0).toLocaleString()}</p>
+                <p className="text-xs text-amber-600 font-medium">
+                  {recognitionStats.totalAttempts > 0 
+                    ? ((recognitionStats.lowConfidence / recognitionStats.totalAttempts * 100).toFixed(1))
+                    : 0}% of attempts
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -203,8 +255,12 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Failed Recognitions</p>
-                <p className="text-2xl font-bold">146</p>
-                <p className="text-xs text-red-600 font-medium">1.1% failure rate</p>
+                <p className="text-2xl font-bold">{(recognitionStats.failedRecognitions || 0).toLocaleString()}</p>
+                <p className="text-xs text-red-600 font-medium">
+                  {recognitionStats.totalAttempts > 0 
+                    ? ((recognitionStats.failedRecognitions / recognitionStats.totalAttempts * 100).toFixed(1))
+                    : 0}% failure rate
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -217,12 +273,12 @@ export default function AnalyticsPage() {
             <CardHeader>
               <CardTitle>Attendance Trends</CardTitle>
               <CardDescription>
-                Monthly attendance rate across all departments
+                Attendance rate over time
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-primary">
-                <AttendanceTrendChart />
+                <AttendanceTrendChart data={attendanceTrends} />
               </div>
             </CardContent>
           </Card>
@@ -237,7 +293,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-primary">
-                <DepartmentChart />
+                <DepartmentChart data={departmentComparison} />
               </div>
             </CardContent>
           </Card>
@@ -253,28 +309,36 @@ export default function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RecognitionDonut />
+              <RecognitionDonut successRate={recognitionStats.successRate || 0} />
               <div className="mt-4 space-y-2">
                 <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <div className="h-2.5 w-2.5 rounded-full bg-primary" />
                     <span className="text-sm">Successful</span>
                   </div>
-                  <span className="text-sm font-semibold">96.8%</span>
+                  <span className="text-sm font-semibold">{(recognitionStats.successRate || 0).toFixed(1)}%</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <div className="h-2.5 w-2.5 rounded-full bg-warning" />
                     <span className="text-sm">Low Confidence</span>
                   </div>
-                  <span className="text-sm font-semibold">2.1%</span>
+                  <span className="text-sm font-semibold">
+                    {recognitionStats.totalAttempts > 0 
+                      ? ((recognitionStats.lowConfidence / recognitionStats.totalAttempts * 100).toFixed(1))
+                      : 0}%
+                  </span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
                     <span className="text-sm">Failed</span>
                   </div>
-                  <span className="text-sm font-semibold">1.1%</span>
+                  <span className="text-sm font-semibold">
+                    {recognitionStats.totalAttempts > 0 
+                      ? ((recognitionStats.failedRecognitions / recognitionStats.totalAttempts * 100).toFixed(1))
+                      : 0}%
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -290,31 +354,30 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {[
-                  { time: "8:00 - 9:00 AM", pct: 92, count: 345 },
-                  { time: "9:00 - 10:00 AM", pct: 98, count: 412 },
-                  { time: "10:00 - 11:00 AM", pct: 74, count: 267 },
-                  { time: "11:00 - 12:00 PM", pct: 65, count: 198 },
-                  { time: "1:00 - 2:00 PM", pct: 88, count: 310 },
-                  { time: "2:00 - 3:00 PM", pct: 70, count: 245 },
-                ].map((slot) => (
-                  <div key={slot.time} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-foreground">
-                        {slot.time}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {slot.count} check‑ins · {slot.pct}%
-                      </span>
+                {timeSlotDistribution.length > 0 ? (
+                  timeSlotDistribution.map((slot) => (
+                    <div key={slot.time} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-foreground">
+                          {slot.time}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {slot.count} check‑ins · {slot.rate}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${slot.rate}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${slot.pct}%` }}
-                      />
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm py-4">
+                    No data available for today
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>

@@ -10,11 +10,14 @@ export interface UpdateEnrollmentPayload {
 
 export interface Enrollment {
   id: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   student: string;
   subject: string;
-  // If the backend serializes relationships:
-  student_detail?: any;
-  subject_detail?: any;
+  student_name?: string;
+  student_email?: string;
+  student_roll_number?: string;
+  student_department?: string;
+  subject_name?: string;
+  subject_code?: string;
 }
