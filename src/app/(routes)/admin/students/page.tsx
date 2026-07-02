@@ -40,29 +40,10 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-utils";
 import { useCreateStudent, useStudents, useUpdateStudent, useDeleteStudent, useStudentsWithFilters, useExportStudentsExcel } from "@/hooks/useStudent";
 import { Student } from "@/types/student";
 import { toast } from "sonner";
-
-const getErrorMessage = (err: any, fallback: string = "An error occurred") => {
-  const errorData = err?.response?.data?.error;
-  if (!errorData) {
-    return err?.response?.data?.message || err?.message || fallback;
-  }
-  if (typeof errorData === "string") {
-    return errorData;
-  }
-  if (typeof errorData === "object") {
-    return Object.entries(errorData)
-      .map(([key, val]) => {
-        const fieldName = key.replace(/_/g, " ");
-        const messages = Array.isArray(val) ? val.join(", ") : String(val);
-        return `${fieldName}: ${messages}`;
-      })
-      .join(" | ");
-  }
-  return fallback;
-};
 
 export default function StudentManagementPage() {
   const [open, setOpen] = React.useState(false);
@@ -127,12 +108,7 @@ export default function StudentManagementPage() {
   
   const isPending = isCreating || isUpdating;
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('Students Data:', studentsData);
-    console.log('Students Array:', students);
-    console.log('Total Count:', totalCount);
-  }, [studentsData, students, totalCount]);
+
 
   const handleExportExcel = () => {
     exportExcel({

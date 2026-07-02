@@ -39,6 +39,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { getStatusBadgeVariant } from "@/lib/badge-colors";
 import { format } from "date-fns";
 import { useAttendanceHistory, useEnrolledSubjects } from "@/hooks/useStudentDashboard";
 
@@ -446,11 +447,7 @@ export default function AttendanceHistoryPage() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Badge
-                                variant={
-                                  record.status === "PRESENT"
-                                    ? "success"
-                                    : "destructive"
-                                }
+                                variant={getStatusBadgeVariant(record.status)}
                               >
                                 {record.status}
                               </Badge>

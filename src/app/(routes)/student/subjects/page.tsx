@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   BookOpen,
 } from "lucide-react";
+import { getAttendanceRateBadgeVariant } from "@/lib/badge-colors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEnrolledSubjects } from "@/hooks/useStudentDashboard";
 
@@ -251,13 +252,7 @@ export default function StudentSubjectsPage() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Badge
-                                variant={
-                                  subject.attendance_rate >= 90
-                                    ? "success"
-                                    : subject.attendance_rate >= 75
-                                    ? "warning"
-                                    : "destructive"
-                                }
+                                variant={getAttendanceRateBadgeVariant(subject.attendance_rate)}
                               >
                                 {subject.attendance_rate}%
                               </Badge>
@@ -284,13 +279,7 @@ export default function StudentSubjectsPage() {
                                 {subject.subject_code}
                               </p>
                               <Badge
-                                variant={
-                                  subject.attendance_rate >= 90
-                                    ? "success"
-                                    : subject.attendance_rate >= 75
-                                    ? "warning"
-                                    : "destructive"
-                                }
+                                variant={getAttendanceRateBadgeVariant(subject.attendance_rate)}
                               >
                                 {subject.attendance_rate}%
                               </Badge>
