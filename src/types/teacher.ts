@@ -28,6 +28,7 @@ export interface Teacher {
   department?: string | null;
   employee_id?: string;
   status?: string;
+  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 }

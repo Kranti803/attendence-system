@@ -594,8 +594,8 @@ export default function TeacherManagementPage() {
                       </TableCell>
                       <TableCell>{teacher.department || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant={teacher.is_active ? "success" : "secondary"}>
-                          {teacher.is_active ? "Active" : "Inactive"}
+                        <Badge variant={teacher.is_active !== false ? "success" : "secondary"}>
+                          {teacher.is_active !== false ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
