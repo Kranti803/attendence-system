@@ -16,13 +16,22 @@ import { useAnalyticsOverview } from "@/hooks/useAnalytics";
 /* ─── SVG Chart: Attendance Trends (Line) ─── */
 function AttendanceTrendChart({ data }: { data: any[] }) {
   if (!data || data.length === 0) {
-    return <div className="text-center text-muted-foreground">No data available</div>;
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
   }
 
   // Use last 6 months for chart
   const chartData = data.slice(-6);
-  const values = chartData.map(d => d.rate);
-  const max = 100;
+  if (chartData.length === 0) {
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
+  }
+
+  const values = chartData.map(d => typeof d.rate === 'number' ? d.rate : 0);
+  const max = Math.max(...values, 100);
+  
+  if (max === 0 || !isFinite(max)) {
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
+  }
+
   const h = 220;
   const w = 500;
   const padX = 45;
@@ -34,7 +43,7 @@ function AttendanceTrendChart({ data }: { data: any[] }) {
     .map((v, i) => {
       const x = padX + (i / (values.length - 1)) * chartW;
       const y = padY + chartH - (v / max) * chartH;
-      return `${x},${y}`;
+      return `${isFinite(x) ? x : 0},${isFinite(y) ? y : 0}`;
     })
     .join(" ");
 
@@ -42,8 +51,12 @@ function AttendanceTrendChart({ data }: { data: any[] }) {
 
   // Format labels - use day of month
   const labels = chartData.map((d, i) => {
-    const date = new Date(d.date);
-    return date.getDate().toString();
+    try {
+      const date = new Date(d.date);
+      return isFinite(date.getTime()) ? date.getDate().toString() : String(i);
+    } catch {
+      return String(i);
+    }
   });
 
   return (
@@ -56,28 +69,28 @@ function AttendanceTrendChart({ data }: { data: any[] }) {
       </defs>
       {[0, 25, 50, 75, 100].map((v) => {
         const y = padY + chartH - (v / max) * chartH;
-        return (
+        return isFinite(y) ? (
           <g key={v}>
             <line x1={padX} y1={y} x2={padX + chartW} y2={y} stroke="currentColor" strokeOpacity="0.12" strokeDasharray="4 4" />
             <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.55">
-              {v}%
+              {Math.round((v / max) * 100)}%
             </text>
           </g>
-        );
+        ) : null;
       })}
       <polygon points={areaPoints} fill="url(#trendGrad)" />
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       {values.map((v, i) => {
         const x = padX + (i / (values.length - 1)) * chartW;
         const y = padY + chartH - (v / max) * chartH;
-        return (
+        return isFinite(x) && isFinite(y) ? (
           <g key={i}>
             <circle cx={x} cy={y} r="4" fill="currentColor" stroke="white" strokeWidth="2" />
             <text x={x} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
               {labels[i]}
             </text>
           </g>
-        );
+        ) : null;
       })}
     </svg>
   );
@@ -86,11 +99,21 @@ function AttendanceTrendChart({ data }: { data: any[] }) {
 /* ─── SVG Chart: Department Comparison (Bar) ─── */
 function DepartmentChart({ data }: { data: any[] }) {
   if (!data || data.length === 0) {
-    return <div className="text-center text-muted-foreground">No data available</div>;
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
   }
 
   const departments = data.slice(0, 5); // Top 5 departments
-  const max = 100;
+  if (departments.length === 0) {
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
+  }
+
+  const rates = departments.map(d => typeof d.rate === 'number' ? d.rate : 0);
+  const max = Math.max(...rates, 100);
+  
+  if (max === 0 || !isFinite(max)) {
+    return <div className="text-center text-muted-foreground py-8">No data available</div>;
+  }
+
   const h = 220;
   const w = 500;
   const padX = 45;
@@ -103,31 +126,32 @@ function DepartmentChart({ data }: { data: any[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
       {[0, 25, 50, 75, 100].map((v) => {
         const y = padY + chartH - (v / max) * chartH;
-        return (
+        return isFinite(y) ? (
           <g key={v}>
             <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="currentColor" strokeOpacity="0.12" strokeDasharray="4 4" />
             <text x={padX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" opacity="0.55">
-              {v}%
+              {Math.round((v / max) * 100)}%
             </text>
           </g>
-        );
+        ) : null;
       })}
       {departments.map((d, i) => {
         const x = padX + gap + i * (barW + gap);
         const barH = (d.rate / max) * chartH;
         const y = padY + chartH - barH;
-        const deptName = d.name.substring(0, 3).toUpperCase();
-        return (
+        const deptName = (d.name || "N/A").substring(0, 3).toUpperCase();
+        
+        return isFinite(x) && isFinite(y) && isFinite(barH) ? (
           <g key={d.name}>
             <rect x={x} y={y} width={barW} height={barH} rx={6} fill="currentColor" opacity={0.75} />
             <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.85" fontWeight="600">
-              {d.rate}%
+              {d.rate.toFixed(0)}%
             </text>
             <text x={x + barW / 2} y={h - 4} textAnchor="middle" fontSize="11" fill="currentColor" opacity="0.7" fontWeight="500">
               {deptName}
             </text>
           </g>
-        );
+        ) : null;
       })}
     </svg>
   );

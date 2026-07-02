@@ -90,7 +90,7 @@ const configs: Record<string, SidebarConfig> = {
     subtitle: "Student Portal",
     items: [
       { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-      { label: "Subjects", href: "/student/subjects/CS101", icon: BookOpen },
+      { label: "Subjects", href: "/student/subjects", icon: BookOpen },
       { label: "Attendance History", href: "/student/history", icon: History },
       { label: "Profile", href: "/student/profile", icon: User },
     ],

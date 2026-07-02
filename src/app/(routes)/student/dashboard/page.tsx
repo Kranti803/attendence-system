@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { TopNavbar } from "@/components/layout/top-navbar";
 import {
   Card,
@@ -9,22 +10,10 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, BookOpen, MapPin } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar, Clock, BookOpen, MapPin, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-/* ─── Static Data ─── */
-const courses = [
-  { name: "CS101 — Intro to CS",        attendance: 92, total: 25, attended: 23, tone: "bg-primary" },
-  { name: "MATH201 — Linear Algebra",   attendance: 88, total: 24, attended: 21, tone: "bg-primary/80" },
-  { name: "PHY301 — Quantum Physics",   attendance: 76, total: 22, attended: 17, tone: "bg-primary/60" },
-  { name: "ENG102 — Technical Writing", attendance: 96, total: 20, attended: 19, tone: "bg-primary/90" },
-];
-
-const upcomingClasses = [
-  { name: "CS101 — Intro to CS",        time: "11:00 AM", room: "Room 201", teacher: "Dr. Sarah Wilson" },
-  { name: "MATH201 — Linear Algebra",   time: "02:00 PM", room: "Room 305", teacher: "Prof. James Carter" },
-  { name: "PHY301 — Quantum Physics",   time: "04:00 PM", room: "Lab 3",    teacher: "Dr. Emily Chen" },
-];
+import { useStudentOverallStats, useStudentCourseAttendance, useUpcomingClasses } from "@/hooks/useStudentDashboard";
 
 /* ─── Donut Chart Component ─── */
 function OverallAttendanceDonut({ value }: { value: number }) {
@@ -65,16 +54,24 @@ function OverallAttendanceDonut({ value }: { value: number }) {
 
 /* ─── Page ─── */
 export default function StudentDashboardPage() {
-  const overallAttendance = 88;
+  const { data: stats, isLoading: statsLoading } = useStudentOverallStats();
+  const { data: courses, isLoading: coursesLoading } = useStudentCourseAttendance();
+  const { data: upcomingClasses, isLoading: classesLoading } = useUpcomingClasses(7);
+
+  const overallAttendance = stats?.semester_attendance_rate || 0;
+  const classesAttended = stats?.classes_attended || 0;
+  const classesMissed = stats?.classes_missed || 0;
+  const streak = stats?.streak || 0;
+  const userName = "Student"; // In production, get from auth context
 
   return (
     <>
-      <TopNavbar title="Dashboard" userInitials="JD" />
+      <TopNavbar title="Dashboard" userInitials="ST" />
       <div className="p-6 space-y-6">
         {/* ── Welcome ── */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, John! 👋
+            Welcome back, {userName}! 👋
           </h1>
           <p className="text-sm text-muted-foreground">
             Here&apos;s an overview of your attendance this semester.
@@ -89,17 +86,31 @@ export default function StudentDashboardPage() {
               <CardDescription>Current semester</CardDescription>
             </CardHeader>
             <CardContent>
-              <OverallAttendanceDonut value={overallAttendance} />
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-emerald-50 p-3 text-center">
-                  <p className="text-lg font-bold text-emerald-600">80</p>
-                  <p className="text-xs text-emerald-700">Classes Attended</p>
+              {statsLoading ? (
+                <div className="flex justify-center">
+                  <Skeleton className="h-48 w-48 rounded-full" />
                 </div>
-                <div className="rounded-xl bg-red-50 p-3 text-center">
-                  <p className="text-lg font-bold text-red-600">11</p>
-                  <p className="text-xs text-red-700">Classes Missed</p>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <OverallAttendanceDonut value={overallAttendance} />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-emerald-50 p-3 text-center">
+                      <p className="text-lg font-bold text-emerald-600">{classesAttended}</p>
+                      <p className="text-xs text-emerald-700">Classes Attended</p>
+                    </div>
+                    <div className="rounded-xl bg-red-50 p-3 text-center">
+                      <p className="text-lg font-bold text-red-600">{classesMissed}</p>
+                      <p className="text-xs text-red-700">Classes Missed</p>
+                    </div>
+                  </div>
+                  {streak > 0 && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-700">
+                      <Flame className="h-4 w-4" />
+                      <span>{streak} day streak! 🔥</span>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -110,43 +121,73 @@ export default function StudentDashboardPage() {
               <CardDescription>Attendance breakdown by subject</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {courses.map((course) => (
-                <div key={course.name} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("h-3 w-3 rounded-full", course.tone)} />
-                      <span className="text-sm font-medium text-foreground">
-                        {course.name}
-                      </span>
+              {coursesLoading ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-2.5 w-full" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {course.attended}/{course.total} classes
-                      </span>
-                      <Badge
-                        variant={
-                          course.attendance >= 90
-                            ? "success"
-                            : course.attendance >= 75
-                            ? "warning"
-                            : "destructive"
-                        }
-                      >
-                        {course.attendance}%
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-500",
-                        course.tone
-                      )}
-                      style={{ width: `${course.attendance}%` }}
-                    />
-                  </div>
+                  ))}
                 </div>
-              ))}
+              ) : courses && courses.length > 0 ? (
+                courses.map((course) => {
+                  const tones = [
+                    "bg-blue-500",
+                    "bg-purple-500",
+                    "bg-pink-500",
+                    "bg-green-500",
+                  ];
+                  const tone = tones[courses.indexOf(course) % tones.length];
+
+                  return (
+                    <div key={course.subject_id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={cn("h-3 w-3 rounded-full shrink-0", tone)} />
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium text-foreground block truncate">
+                              {course.subject_name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {course.subject_code}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {course.classes_attended}/{course.total_classes}
+                          </span>
+                          <Badge
+                            variant={
+                              course.attendance_rate >= 90
+                                ? "success"
+                                : course.attendance_rate >= 75
+                                ? "warning"
+                                : "destructive"
+                            }
+                          >
+                            {course.attendance_rate}%
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            tone
+                          )}
+                          style={{ width: `${course.attendance_rate}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No enrollment data available
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -158,39 +199,55 @@ export default function StudentDashboardPage() {
               <CardTitle>Upcoming Classes</CardTitle>
               <Badge variant="default">
                 <Calendar className="h-3 w-3 mr-1" />
-                Today
+                Next 7 Days
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {upcomingClasses.map((cls, i) => (
-                <div
-                  key={i}
-                  className="group rounded-xl border border-border p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                >
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary">
-                    <BookOpen className="h-5 w-5" />
-                  </div>
-                  <h3 className="font-semibold text-foreground text-sm mb-2">
-                    {cls.name}
-                  </h3>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" />
-                      {cls.time}
+            {classesLoading ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-40 rounded-xl" />
+                ))}
+              </div>
+            ) : upcomingClasses && upcomingClasses.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                {upcomingClasses.slice(0, 3).map((cls, i) => (
+                  <div
+                    key={i}
+                    className="group rounded-xl border border-border p-4 transition-all hover:border-primary/30 hover:shadow-md"
+                  >
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary">
+                      <BookOpen className="h-5 w-5" />
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {cls.room}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {cls.teacher}
+                    <h3 className="font-semibold text-foreground text-sm mb-2 truncate">
+                      {cls.subject_code}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                      {cls.subject_name}
                     </p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{cls.date}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{cls.start_time.substring(0, 5)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{cls.teacher_name}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No upcoming classes in the next 7 days</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

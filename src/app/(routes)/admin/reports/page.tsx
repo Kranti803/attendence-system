@@ -21,7 +21,6 @@ import {
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
@@ -59,6 +58,8 @@ function AdminReportsPage() {
   // ── State for filters ──
   const [startDate, setStartDate] = React.useState(defaultStartDate);
   const [endDate, setEndDate] = React.useState(defaultEndDate);
+  const [startDateOpen, setStartDateOpen] = React.useState(false);
+  const [endDateOpen, setEndDateOpen] = React.useState(false);
   const [departmentFilter, setDepartmentFilter] = React.useState<string>("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<"date" | "class" | "rate" | "present" | "department">("date");
@@ -219,18 +220,16 @@ function AdminReportsPage() {
               {/* Start Date Picker */}
               <div className="min-w-0">
                 <label className="text-sm font-medium text-foreground block mb-2">Start Date</label>
-                <Popover>
-                  <PopoverTrigger>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {format(new Date(startDate), "MMM dd, yyyy")}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
+                <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                  <div
+                    onClick={() => setStartDateOpen(!startDateOpen)}
+                    className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer flex items-center justify-start text-left font-normal hover:bg-accent"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {format(new Date(startDate), "MMM dd, yyyy")}
+                    </span>
+                  </div>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
                       mode="single"
@@ -238,6 +237,7 @@ function AdminReportsPage() {
                       onSelect={(date) => {
                         if (date) {
                           setStartDate(date.toISOString().split("T")[0]);
+                          setStartDateOpen(false);
                         }
                       }}
                       disabled={(date) =>
@@ -251,18 +251,16 @@ function AdminReportsPage() {
               {/* End Date Picker */}
               <div className="min-w-0">
                 <label className="text-sm font-medium text-foreground block mb-2">End Date</label>
-                <Popover>
-                  <PopoverTrigger>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {format(new Date(endDate), "MMM dd, yyyy")}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
+                <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+                  <div
+                    onClick={() => setEndDateOpen(!endDateOpen)}
+                    className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer flex items-center justify-start text-left font-normal hover:bg-accent"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {format(new Date(endDate), "MMM dd, yyyy")}
+                    </span>
+                  </div>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
                       mode="single"
@@ -270,6 +268,7 @@ function AdminReportsPage() {
                       onSelect={(date) => {
                         if (date) {
                           setEndDate(date.toISOString().split("T")[0]);
+                          setEndDateOpen(false);
                         }
                       }}
                       disabled={(date) =>
