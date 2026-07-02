@@ -63,7 +63,10 @@ export default function TeacherDashboardPage() {
 
   const today = new Date().toISOString().split("T")[0];
   const now = new Date();
-  const currentTimeString = now.toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" });
+  // Use 24-hour format for time comparisons with backend times (which are "HH:mm")
+  const currentTimeString24hr = now.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
+  // Use 12-hour format for display only
+  const currentTimeString12hr = now.toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" });
 
   // ── Compute Today's Classes ──
   const todayClasses = classSessions
@@ -72,8 +75,9 @@ export default function TeacherDashboardPage() {
 
   // ── Compute Active Session ──
   // A session is active if start_time <= current time <= end_time
+  // Compare using 24-hour format ("09:30") with backend times
   const activeSession = todayClasses.find((session) => {
-    return session.start_time <= currentTimeString && session.end_time >= currentTimeString;
+    return session.start_time <= currentTimeString24hr && session.end_time >= currentTimeString24hr;
   });
 
   // ── Compute Today's Attendance Stats ──
@@ -371,9 +375,10 @@ export default function TeacherDashboardPage() {
                     let status = "Upcoming";
                     let badgeVariant: "secondary" | "success" | "warning" = "secondary";
                     
-                    if (cls.end_time < currentTimeString) {
+                    // Use 24-hour format for time comparisons
+                    if (cls.end_time < currentTimeString24hr) {
                       status = "Ended";
-                    } else if (cls.start_time <= currentTimeString && cls.end_time >= currentTimeString) {
+                    } else if (cls.start_time <= currentTimeString24hr && cls.end_time >= currentTimeString24hr) {
                       status = "In Progress";
                       badgeVariant = "success";
                     } else {

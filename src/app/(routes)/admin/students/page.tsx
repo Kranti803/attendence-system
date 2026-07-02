@@ -734,19 +734,28 @@ export default function StudentManagementPage() {
                   <TableHead>Student</TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted"
-                    onClick={() => setSortBy(sortBy === 'roll_number' ? '-roll_number' : 'roll_number')}
+                    onClick={() => {
+                      setSortBy(sortBy === 'roll_number' ? '-roll_number' : 'roll_number');
+                      setCurrentPage(1);
+                    }}
                   >
                     Roll No. {sortBy === 'roll_number' && '↑'} {sortBy === '-roll_number' && '↓'}
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted"
-                    onClick={() => setSortBy(sortBy === 'department' ? '-department' : 'department')}
+                    onClick={() => {
+                      setSortBy(sortBy === 'department' ? '-department' : 'department');
+                      setCurrentPage(1);
+                    }}
                   >
                     Department {sortBy === 'department' && '↑'} {sortBy === '-department' && '↓'}
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted"
-                    onClick={() => setSortBy(sortBy === 'year' ? '-year' : 'year')}
+                    onClick={() => {
+                      setSortBy(sortBy === 'year' ? '-year' : 'year');
+                      setCurrentPage(1);
+                    }}
                   >
                     Year {sortBy === 'year' && '↑'} {sortBy === '-year' && '↓'}
                   </TableHead>

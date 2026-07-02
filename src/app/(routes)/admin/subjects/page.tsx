@@ -495,7 +495,7 @@ export default function AdminSubjectsPage() {
                         {s.semester ? `Sem ${s.semester}` : "—"}
                       </TableCell>
                       <TableCell>
-                        {s.teacher_name ?? (
+                        {s.teacher_name ? s.teacher_name : (
                           <span className="text-muted-foreground text-xs">Unassigned</span>
                         )}
                       </TableCell>
