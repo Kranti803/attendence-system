@@ -101,14 +101,18 @@ export const getWebSocketUrl = (sessionId: string) => {
 
 /**
  * Start a live attendance session.
+ * Can start from either a template_id (recurring) or class_session_id (legacy).
  * Returns session_id for WebSocket connection.
  */
 export const startAttendanceSessionFn = async (
-  classSessionId: string
+  idValue: string
 ): Promise<AttendanceSessionStartResponse> => {
+  // Default to template-based (new approach)
+  const payload = { template_id: idValue };
+    
   const response = await apiClient.post<AttendanceSessionStartResponse>(
     '/attendance/start_session/',
-    { class_session_id: classSessionId }
+    payload
   );
   return (response.data as any)?.data || response.data;
 };

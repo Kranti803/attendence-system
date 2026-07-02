@@ -18,6 +18,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /* ─── Static Data ─── */
 const features = [
@@ -133,6 +134,7 @@ export default function HomePage() {
             </a>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link href="/login">
               <Button variant="outline" size="sm">
                 Sign In

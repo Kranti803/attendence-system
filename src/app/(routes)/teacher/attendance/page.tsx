@@ -18,7 +18,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Camera,
   Play,
   Square,
   CheckCircle2,
@@ -44,199 +43,66 @@ import {
   useStartAttendanceSession,
   useEndAttendanceSession,
 } from "@/hooks/useAttendance";
-import { useAttendanceStream, useAttendanceCameraStream } from "@/hooks/useAttendanceStream";
-import { DetectedStudent, AttendanceSessionEndResponse, FaceOverlay } from "@/types/attendance";
+import {
+  useMyTemplates,
+  useCreateTemplate,
+} from "@/hooks/useClassSessionTemplate";
+import { AttendanceSessionEndResponse } from "@/types/attendance";
+import { CreateClassSessionTemplatePayload } from "@/types/classSessionTemplate";
 
-const EMPTY_SESSION_FORM = {
-  class_name: "",
+const EMPTY_TEMPLATE_FORM: CreateClassSessionTemplatePayload = {
   subject: "",
-  date: new Date().toISOString().split("T")[0],
-  start_time: "",
-  end_time: "",
+  day_of_week: 0,
+  start_time: "09:00",
+  end_time: "10:00",
+  max_attendance_marking_minutes: 15,
+  is_active: true,
 };
 
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function TeacherAttendancePage() {
-  // ── Session selection ─────────────────────────────────────────────────────
-  const [selectedSessionId, setSelectedSessionId] = React.useState("");
+  // ── Template/Session selection ──────────────────────────────────────────
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState("");
   const [sessionState, setSessionState] = React.useState<"idle" | "running" | "ended">("idle");
 
   // ── Live attendance session ───────────────────────────────────────────────
   const [liveSessionId, setLiveSessionId] = React.useState<string | null>(null);
-  const [liveDetectedStudents, setLiveDetectedStudents] = React.useState<DetectedStudent[]>([]);
   const [sessionSummaryData, setSessionSummaryData] = React.useState<AttendanceSessionEndResponse['summary'] | null>(null);
 
-  // ── Create session dialog ─────────────────────────────────────────────────
+  // ── Create template dialog ────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [sessionForm, setSessionForm] = React.useState(EMPTY_SESSION_FORM);
-
-  // ── Camera ────────────────────────────────────────────────────────────────
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
-  const [isCameraActive, setIsCameraActive] = React.useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = React.useState<"user" | "environment">("user");
-  const facesRef = React.useRef<FaceOverlay[]>([]);
+  const [templateForm, setTemplateForm] = React.useState(EMPTY_TEMPLATE_FORM);
 
   // ── Elapsed timer ─────────────────────────────────────────────────────────
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Data hooks ────────────────────────────────────────────────────────────
-  const { data: classSessions = [], isLoading: isLoadingSessions } = useClassSessions();
+  const { data: myTemplates = [], isLoading: isLoadingTemplates } = useMyTemplates();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
-  const { mutate: createClassSession, isPending: isCreatingSession } = useCreateClassSession();
+  const { mutate: createTemplate, isPending: isCreatingTemplate } = useCreateTemplate();
 
   const isSessionLive = sessionState === "running";
 
   const { data: sessionSummary } = useSessionSummary(
-    selectedSessionId || null,
+    selectedTemplateId || null,
     isSessionLive,
   );
 
   const { data: classAttendance = [], isLoading: isLoadingAttendance } =
-    useClassAttendance(selectedSessionId || null);
+    useClassAttendance(selectedTemplateId || null);
 
   const { mutate: startSession, isPending: isStartingSession } = useStartAttendanceSession();
   const { mutate: endSession, isPending: isEndingSession } = useEndAttendanceSession();
 
-  // WebSocket stream
-  const {
-    isConnected,
-    isConnecting,
-    sendFrame,
-    faces: wsFaces,
-    error: wsError,
-  } = useAttendanceStream({
-    sessionId: liveSessionId,
-    onDetected: (students) => {
-      setLiveDetectedStudents((prev) => {
-        const newIds = new Set(students.map((s) => s.student_id));
-        const filtered = prev.filter((p) => !newIds.has(p.student_id));
-        return [...students, ...filtered]; // Prepend newest first
-      });
-      students.forEach((s) => {
-        toast.success(`${s.student_name} detected! (${(s.confidence * 100).toFixed(0)}%)`);
-      });
-    },
-    onConnected: () => {
-      toast.success("Live detection connected");
-    },
-    onError: (err) => {
-      toast.error(err);
-    },
-  });
-
-  // Keep facesRef in sync so the rAF loop always reads the latest data
-  React.useEffect(() => {
-    facesRef.current = wsFaces;
-  }, [wsFaces]);
-
-  // Continuous frame capture — send at 300ms intervals
-  useAttendanceCameraStream(videoRef, isCameraActive && sessionState === "running" && !!liveSessionId, sendFrame, 300);
-
-  // ── rAF canvas draw loop — runs at monitor refresh rate for smooth boxes ──
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // ── Initialize canvas size ONCE before animation loop ──────────────
-    const initializeCanvas = () => {
-      const { width, height } = video.getBoundingClientRect();
-      canvas.width = width;
-      canvas.height = height;
-    };
-
-    initializeCanvas();
-
-    let animId: number;
-
-    const draw = () => {
-      animId = requestAnimationFrame(draw);
-
-      const faces = facesRef.current;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (!isCameraActive || faces.length === 0) return;
-
-      // Video is captured at 480×360, canvas displays at full size
-      // Use canvas dimensions for scaling (they match video display size)
-      const scaleX = canvas.width / 480;
-      const scaleY = canvas.height / 360;
-
-      faces.forEach((face: FaceOverlay) => {
-        const x = face.x * scaleX;
-        const y = face.y * scaleY;
-        const w = face.w * scaleX;
-        const h = face.h * scaleY;
-
-        const color =
-          face.status === "identified"
-            ? "#22c55e" // Green
-            : face.status === "ambiguous"
-            ? "#eab308" // Yellow
-            : "#ef4444"; // Red
-
-        // Glowing box
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.strokeRect(x, y, w, h);
-        ctx.shadowBlur = 0;
-
-        // Translucent fill
-        ctx.fillStyle = color + "10";
-        ctx.fillRect(x, y, w, h);
-
-        // Label
-        let label = "UNKNOWN";
-        if (face.status === "identified") {
-          label = face.student_name || "IDENTIFIED";
-        } else if (face.status === "ambiguous") {
-          label = "AMBIGUOUS";
-        }
-
-        const fontSize = Math.max(8, Math.round(w * 0.08));
-        ctx.font = `500 ${fontSize}px Inter, sans-serif`;
-        const textW = ctx.measureText(label).width;
-        const labelH = fontSize + 4;
-        const labelY = y > labelH + 4 ? y - labelH - 2 : y + h + 2;
-
-        ctx.fillStyle = color;
-        ctx.fillRect(x, labelY, textW + 8, labelH);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(label, x + 4, labelY + fontSize - 2);
-      });
-    };
-
-    draw();
-
-    // ── Resize listener (only resize canvas when window resizes) ────────────
-    const handleResize = () => {
-      initializeCanvas();
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [isCameraActive]);
-
   // ── Helpers ───────────────────────────────────────────────────────────────
+  const selectedTemplate = myTemplates.find((t) => t.id === selectedTemplateId);
+
   const subjectName = (id: string) => {
     const s = subjects.find((sub) => sub.id === id);
     return s ? `${s.name} (${s.code})` : "";
   };
-
-  const selectedSession = classSessions.find((s) => s.id === selectedSessionId);
 
   const formatElapsed = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -248,62 +114,25 @@ export default function TeacherAttendancePage() {
 
   // ── Dynamic Stats ────────────────────────────────────────────────────────
   const total = sessionSummary?.total_students ?? sessionSummaryData?.total_students ?? 0;
-  const present =
-    sessionState === "running"
-      ? liveDetectedStudents.length
-      : (sessionSummary?.present ?? sessionSummaryData?.present ?? 0);
-  const absent = sessionState === "running" ? total - present : (sessionSummary?.absent ?? sessionSummaryData?.absent ?? 0);
+  const present = sessionSummary?.present ?? sessionSummaryData?.present ?? 0;
+  const absent = sessionSummary?.absent ?? sessionSummaryData?.absent ?? 0;
   const attendanceRate = total > 0 ? (present / total) * 100 : 0;
-
-  // ── Camera controls ───────────────────────────────────────────────────────
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: cameraFacingMode, width: 1280, height: 720 },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setIsCameraActive(true);
-      }
-    } catch (error) {
-      console.error("Error accessing camera:", error);
-      toast.error("Could not access camera. Please check permissions.");
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraActive(false);
-  };
-
-  const toggleCameraFacing = () => {
-    setCameraFacingMode(prev => prev === "user" ? "environment" : "user");
-  };
 
   // ── Session lifecycle ─────────────────────────────────────────────────────
   const handleStartSession = async () => {
-    if (!selectedSessionId) {
-      toast.error("Please select a class session first.");
+    if (!selectedTemplateId) {
+      toast.error("Please select a recurring class first.");
       return;
     }
 
-    startSession(selectedSessionId, {
+    startSession(selectedTemplateId, {
       onSuccess: (response) => {
         setLiveSessionId(response.id);
-        setLiveDetectedStudents([]);
         setSessionSummaryData(null);
         setElapsedSeconds(0);
-        startCamera();
         setSessionState("running");
 
-        toast.success("Live session started!");
+        toast.success("Live session started! Students can now mark attendance.");
 
         timerRef.current = setInterval(() => {
           setElapsedSeconds((prev) => prev + 1);
@@ -318,7 +147,6 @@ export default function TeacherAttendancePage() {
   const handleEndSession = () => {
     if (!liveSessionId) {
       setSessionState("ended");
-      stopCamera();
       if (timerRef.current) clearInterval(timerRef.current);
       toast.success("Attendance session ended.");
       return;
@@ -329,7 +157,6 @@ export default function TeacherAttendancePage() {
         setSessionSummaryData(response.summary);
         setLiveSessionId(null);
         setSessionState("ended");
-        stopCamera();
         if (timerRef.current) clearInterval(timerRef.current);
         if (response?.summary) {
           toast.success(`Session ended! ${response.summary.present} present, ${response.summary.absent} absent (${response.summary.attendance_rate.toFixed(1)}%)`);
@@ -340,7 +167,6 @@ export default function TeacherAttendancePage() {
       onError: (err) => {
         toast.error(err.message || "Failed to end session");
         setSessionState("ended");
-        stopCamera();
         if (timerRef.current) clearInterval(timerRef.current);
       },
     });
@@ -349,39 +175,40 @@ export default function TeacherAttendancePage() {
   const handleReset = () => {
     setSessionState("idle");
     setLiveSessionId(null);
-    setLiveDetectedStudents([]);
     setSessionSummaryData(null);
     setElapsedSeconds(0);
-    stopCamera();
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
   // Cleanup on unmount
   React.useEffect(() => {
     return () => {
-      stopCamera();
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
-  // ── Create session handler ────────────────────────────────────────────────
-  const handleCreateSession = (e: React.FormEvent) => {
+  // ── Create template handler ───────────────────────────────────────────────
+  const handleCreateTemplate = (e: React.FormEvent) => {
     e.preventDefault();
-    createClassSession(sessionForm, {
-      onSuccess: (newSession) => {
-        setSelectedSessionId(newSession.id);
+    createTemplate(templateForm, {
+      onSuccess: (newTemplate) => {
+        setSelectedTemplateId(newTemplate.id);
         setCreateOpen(false);
-        setSessionForm(EMPTY_SESSION_FORM);
-        toast.success("Class session created! It's now selected.");
+        setTemplateForm(EMPTY_TEMPLATE_FORM);
+        toast.success("Recurring class created! You can now start sessions for it.");
       },
       onError: (err) => toast.error(err.message),
     });
   };
 
-  const handleSessionFormChange = (
+  const handleTemplateFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    setSessionForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setTemplateForm((prev) => ({
+      ...prev,
+      [name]: name === "day_of_week" ? parseInt(value) : value,
+    }));
   };
 
   // ── UI Badges ──────────────────────────────────────────────────────────────
@@ -414,7 +241,7 @@ export default function TeacherAttendancePage() {
               </Badge>
             </div>
             <p className="text-muted-foreground mt-1">
-              Select a class session and start the live feed to capture attendance.
+              Select a recurring class and start the live feed to capture attendance.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -426,30 +253,18 @@ export default function TeacherAttendancePage() {
               <DialogTrigger asChild>
                 <Button disabled={sessionState !== "idle"}>
                   <Plus className="h-4 w-4 mr-2" />
-                  New Session
+                  New Template
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
-                <form onSubmit={handleCreateSession}>
+                <form onSubmit={handleCreateTemplate}>
                   <DialogHeader>
-                    <DialogTitle>Quick Create Session</DialogTitle>
+                    <DialogTitle>Create Recurring Class</DialogTitle>
                     <DialogDescription>
-                      Create a new class session to take attendance in.
+                      Create a recurring class template (e.g., "Monday 9-10 AM"). Sessions will automatically be available for this schedule.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="mt-4 grid gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">
-                        Class Name / Section <span className="text-destructive">*</span>
-                      </label>
-                      <Input
-                        name="class_name"
-                        value={sessionForm.class_name}
-                        onChange={handleSessionFormChange}
-                        placeholder='e.g. "CS101 — Section A"'
-                        required
-                      />
-                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">
                         Subject <span className="text-destructive">*</span>
@@ -457,8 +272,8 @@ export default function TeacherAttendancePage() {
                       <div className="relative">
                         <select
                           name="subject"
-                          value={sessionForm.subject}
-                          onChange={handleSessionFormChange}
+                          value={templateForm.subject}
+                          onChange={handleTemplateFormChange}
                           required
                           className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
                         >
@@ -474,39 +289,50 @@ export default function TeacherAttendancePage() {
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Day of Week <span className="text-destructive">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          name="day_of_week"
+                          value={templateForm.day_of_week}
+                          onChange={handleTemplateFormChange}
+                          className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          {DAY_NAMES.map((day, index) => (
+                            <option key={index} value={index}>
+                              {day}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      </div>
+                    </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">
-                          Date <span className="text-destructive">*</span>
+                          Start Time <span className="text-destructive">*</span>
                         </label>
                         <Input
-                          name="date"
-                          type="date"
-                          value={sessionForm.date}
-                          onChange={handleSessionFormChange}
+                          name="start_time"
+                          type="time"
+                          value={templateForm.start_time}
+                          onChange={handleTemplateFormChange}
                           required
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-foreground">
-                          Time Window <span className="text-destructive">*</span>
+                          End Time <span className="text-destructive">*</span>
                         </label>
-                        <div className="flex gap-2">
-                          <Input
-                            name="start_time"
-                            type="time"
-                            value={sessionForm.start_time}
-                            onChange={handleSessionFormChange}
-                            required
-                          />
-                          <Input
-                            name="end_time"
-                            type="time"
-                            value={sessionForm.end_time}
-                            onChange={handleSessionFormChange}
-                            required
-                          />
-                        </div>
+                        <Input
+                          name="end_time"
+                          type="time"
+                          value={templateForm.end_time}
+                          onChange={handleTemplateFormChange}
+                          required
+                        />
                       </div>
                     </div>
                   </div>
@@ -514,9 +340,9 @@ export default function TeacherAttendancePage() {
                     <DialogClose asChild>
                       <Button type="button" variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button type="submit" disabled={isCreatingSession}>
-                      {isCreatingSession && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Create & Select
+                    <Button type="submit" disabled={isCreatingTemplate}>
+                      {isCreatingTemplate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Create Template
                     </Button>
                   </DialogFooter>
                 </form>
@@ -525,48 +351,59 @@ export default function TeacherAttendancePage() {
           </div>
         </div>
 
-        {/* ── Active Session Selector ── */}
+        {/* ── Active Session Selector / Controls ── */}
         {sessionState === "idle" && (
           <Card className="border-primary/20 bg-primary/5 shadow-sm">
             <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-4">
               <div className="flex-1 w-full relative">
                 <select
-                  value={selectedSessionId}
-                  onChange={(e) => setSelectedSessionId(e.target.value)}
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
                   className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-4 pr-10 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
                   <option value="" disabled>
-                    {isLoadingSessions
-                      ? "Loading sessions…"
-                      : classSessions.length === 0
-                        ? "No sessions — please create one"
-                        : "Select a class session to begin…"}
+                    {isLoadingTemplates
+                      ? "Loading templates…"
+                      : myTemplates.length === 0
+                        ? "No templates — please create one"
+                        : "Select a recurring class…"}
                   </option>
-                  {classSessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {session.class_name} · {subjectName(session.subject)} · {session.date}
+                  {myTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.subject_code} · {template.day_of_week_display} {template.start_time.slice(0, 5)}-{template.end_time.slice(0, 5)}
                     </option>
                   ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               </div>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleCameraFacing}
-                className="w-full sm:w-auto"
-                title={cameraFacingMode === "user" ? "Switch to back camera" : "Switch to front camera"}
-              >
-                {cameraFacingMode === "user" ? "🤳 Front" : "📸 Back"}
-              </Button>
-              <Button
                 size="lg"
                 className="w-full sm:w-auto"
-                disabled={!selectedSessionId || isStartingSession}
+                disabled={!selectedTemplateId || isStartingSession}
                 onClick={handleStartSession}
               >
                 {isStartingSession ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5 fill-current" />}
-                Start Camera
+                Start Session
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {sessionState === "running" && (
+          <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30">
+            <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-emerald-700">Session is live and collecting attendance</p>
+                <p className="text-xs text-emerald-600 mt-1">Students can now mark their attendance</p>
+              </div>
+              <Button
+                variant="destructive"
+                size="lg"
+                onClick={handleEndSession}
+                disabled={isEndingSession}
+              >
+                {isEndingSession ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Square className="mr-2 h-5 w-5 fill-current" />}
+                End Session
               </Button>
             </CardContent>
           </Card>
@@ -620,87 +457,85 @@ export default function TeacherAttendancePage() {
 
         {/* ── Main Layout Split ── */}
         <div className="grid gap-6 lg:grid-cols-5">
-          {/* Left Column: Camera & Controls */}
+          {/* Left Column: Session Info & Controls */}
           <div className="lg:col-span-3 space-y-4">
-            <Card className="overflow-hidden border-2 border-muted shadow-md">
-              <div className="relative aspect-video bg-slate-950">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0 h-full w-full"
-                  style={{ pointerEvents: "none" }}
-                />
-                
-                {/* Subtle grid overlay for high-tech look */}
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.1)_50%)] bg-size-[100%_4px] pointer-events-none mix-blend-overlay" />
-                
-                {/* Corner reticles */}
-                <div className="absolute top-4 left-4 h-8 w-8 border-l-2 border-t-2 border-white/40 rounded-tl" />
-                <div className="absolute top-4 right-4 h-8 w-8 border-r-2 border-t-2 border-white/40 rounded-tr" />
-                <div className="absolute bottom-4 left-4 h-8 w-8 border-l-2 border-b-2 border-white/40 rounded-bl" />
-                <div className="absolute bottom-4 right-4 h-8 w-8 border-r-2 border-b-2 border-white/40 rounded-br" />
-
-                {/* Empty State / Not Live overlay */}
-                {!isCameraActive && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 text-white/60">
-                    <Camera className="h-12 w-12 mb-3 opacity-50" />
-                    <p className="font-medium text-lg tracking-wide">CAMERA OFFLINE</p>
-                    <p className="text-sm opacity-60 mt-1">
-                      {sessionState === "idle" ? "Select a session and click Start" : "Session has ended"}
+            {/* Session Status Card */}
+            <Card className="overflow-hidden border-2 border-muted shadow-md bg-gradient-to-br from-primary/5 to-primary/2">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Session Status</CardTitle>
+                    <CardDescription>
+                      {sessionState === "idle"
+                        ? "Ready to start"
+                        : sessionState === "running"
+                        ? "Live attendance collection"
+                        : "Session completed"}
+                    </CardDescription>
+                  </div>
+                  <Badge
+                    variant={
+                      sessionState === "running"
+                        ? "success"
+                        : sessionState === "ended"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    className="h-6 gap-1.5 px-2.5"
+                  >
+                    {sessionState === "running" && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                    )}
+                    {sessionState === "idle" ? "Idle" : sessionState === "running" ? "Live" : "Ended"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {selectedTemplate && (
+                  <div className="space-y-2 p-3 rounded-lg bg-background/50 border">
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedTemplate.subject_code} - {selectedTemplate.subject_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedTemplate.day_of_week_display} • {selectedTemplate.start_time.slice(0, 5)}-{selectedTemplate.end_time.slice(0, 5)}
                     </p>
                   </div>
                 )}
-                
-                {/* Websocket Connection Status overlay */}
-                {isCameraActive && isConnecting && (
-                  <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/60 backdrop-blur text-white px-3 py-1.5 rounded-full text-xs font-medium border border-white/10">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Connecting to ML Service...
-                  </div>
-                )}
-              </div>
-              
-              {/* Controls bar below camera */}
-              <div className="bg-muted/30 p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="flex items-center gap-1.5 text-muted-foreground font-mono bg-background px-3 py-1.5 rounded-md border shadow-sm">
-                    <Timer className="h-4 w-4" />
-                    {formatElapsed(elapsedSeconds)}
-                  </div>
-                  {selectedSession && (
-                    <div className="hidden sm:block text-muted-foreground font-medium">
-                      {selectedSession.class_name}
-                    </div>
-                  )}
-                </div>
 
                 {sessionState === "running" && (
-                  <Button
-                    variant="destructive"
-                    onClick={handleEndSession}
-                    disabled={isEndingSession}
-                    className="w-full sm:w-auto font-medium"
-                  >
-                    {isEndingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4 fill-current" />}
-                    End Session
-                  </Button>
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50">
+                    <Timer className="h-4 w-4 text-blue-600 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-600">Elapsed Time</p>
+                      <p className="text-lg font-mono font-bold text-blue-700">{formatElapsed(elapsedSeconds)}</p>
+                    </div>
+                  </div>
                 )}
-              </div>
+
+                {sessionState === "ended" && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <p className="text-sm text-emerald-700 font-medium">Session completed and recorded</p>
+                  </div>
+                )}
+
+                {sessionState === "idle" && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+                    <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-700">Select a session to begin</p>
+                  </div>
+                )}
+              </CardContent>
             </Card>
 
-            {/* Warning when idle */}
-            {sessionState === "idle" && (
-              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                <ShieldAlert className="h-4 w-4 shrink-0" />
-                <p>Ensure your browser has camera permissions enabled. Live recognition will use bandwidth.</p>
-              </div>
-            )}
+            {/* Warning - No Camera Access */}
+            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/30 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              <p>Real-time attendance is collected automatically. Students mark attendance through their mobile app.</p>
+            </div>
           </div>
 
           {/* Right Column: Dynamic Student List */}
@@ -734,45 +569,53 @@ export default function TeacherAttendancePage() {
                     </div>
                   )}
 
-                  {/* Live View (running) */}
-                  {sessionState === "running" && liveDetectedStudents.length === 0 && (
+                  {/* Running - Live attendance view */}
+                  {sessionState === "running" && !isLoadingAttendance && classAttendance.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center">
-                      <div className="relative mb-4">
-                        <Camera className="h-8 w-8 opacity-20" />
-                        <span className="absolute top-0 right-0 h-3 w-3 animate-ping rounded-full bg-emerald-500 opacity-75" />
-                      </div>
-                      <p className="text-sm font-medium">Scanning for faces...</p>
-                      <p className="text-xs opacity-70 mt-1">Students will appear here instantly</p>
+                      <Users className="h-8 w-8 opacity-20 mb-3" />
+                      <p className="text-sm font-medium">Waiting for students...</p>
+                      <p className="text-xs opacity-70 mt-1">Students will appear as they mark attendance</p>
                     </div>
                   )}
 
-                  {sessionState === "running" && liveDetectedStudents.map((student, idx) => (
-                    <div
-                      key={student.student_id}
-                      className="flex items-center gap-3 rounded-lg p-2.5 bg-background border shadow-xs animate-in slide-in-from-top-2 fade-in duration-300 hover:border-emerald-200 transition-colors"
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 className="h-5 w-5" />
+                  {sessionState === "running" && classAttendance.map((record) => {
+                    const isPresent = record.status === "PRESENT";
+                    return (
+                      <div
+                        key={record.id}
+                        className={`flex items-center gap-3 rounded-lg p-2.5 border transition-all animate-in slide-in-from-top-2 fade-in duration-300 ${
+                          isPresent
+                            ? "bg-background shadow-xs hover:border-emerald-200"
+                            : "bg-red-50/30 border-red-100 dark:bg-red-950/10 dark:border-red-900/30"
+                        }`}
+                      >
+                        <Avatar
+                          fallback={record.student_detail ? record.student_detail.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2) : "?"}
+                          className={`h-9 w-9 border-2 ${isPresent ? "border-emerald-100 text-emerald-700 bg-emerald-50" : "border-red-100 text-red-700 bg-red-50"}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className={`truncate text-sm font-semibold ${isPresent ? "text-foreground" : "text-foreground/80"}`}>
+                            {record.student_detail?.name || record.student}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {record.verification_log
+                              ? `${(record.verification_log.face_confidence * 100).toFixed(0)}% confidence`
+                              : "Marked"}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block ${
+                            isPresent ? "text-emerald-700 bg-emerald-100" : "text-red-700 bg-red-100"
+                          }`}>
+                            {record.status}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {student.student_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono text-[10px] bg-muted px-1 rounded">{student.student_roll_number}</span>
-                          <span>• {(student.confidence * 100).toFixed(0)}% Match</span>
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mb-1">
-                          PRESENT
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(student.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Ended View (shows all students) */}
                   {sessionState === "ended" && !isLoadingAttendance && classAttendance.map((record) => {

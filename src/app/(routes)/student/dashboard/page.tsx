@@ -14,6 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, Clock, BookOpen, MapPin, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentOverallStats, useStudentCourseAttendance, useUpcomingClasses } from "@/hooks/useStudentDashboard";
+import { useTodaysClasses } from "@/hooks/useTodaysClasses";
+import { StudentAttendanceMarker } from "@/components/attendance/StudentAttendanceMarker";
+import { useNotifications, type NotificationEvent } from "@/hooks/useNotifications";
 
 /* ─── Donut Chart Component ─── */
 function OverallAttendanceDonut({ value }: { value: number }) {
@@ -54,9 +57,33 @@ function OverallAttendanceDonut({ value }: { value: number }) {
 
 /* ─── Page ─── */
 export default function StudentDashboardPage() {
+  const [notifications, setNotifications] = React.useState<NotificationEvent[]>([]);
+
   const { data: stats, isLoading: statsLoading } = useStudentOverallStats();
   const { data: courses, isLoading: coursesLoading } = useStudentCourseAttendance();
   const { data: upcomingClasses, isLoading: classesLoading } = useUpcomingClasses(7);
+  const { data: todaysClasses, isLoading: todaysLoading, refetch: refetchTodaysClasses } = useTodaysClasses();
+  
+  // Connect to real-time notifications and get connection status
+  const { isConnected } = useNotifications({
+    onSessionStarted: (event) => {
+      console.log('📬 Notification: Session started', event.subject_code);
+      setNotifications(prev => [event, ...prev]);
+      // Explicitly refetch to show running session immediately
+      refetchTodaysClasses();
+    },
+    onSessionEnded: (event) => {
+      console.log('📬 Notification: Session ended', event.subject_code);
+      setNotifications(prev => [event, ...prev]);
+      // Explicitly refetch to update status
+      refetchTodaysClasses();
+    },
+    onAttendanceMarked: (event) => {
+      console.log('📬 Notification: Attendance marked', event.subject_code);
+      setNotifications(prev => [event, ...prev]);
+    },
+    autoRefetch: true,
+  });
 
   const overallAttendance = stats?.semester_attendance_rate || 0;
   const classesAttended = stats?.classes_attended || 0;
@@ -64,9 +91,19 @@ export default function StudentDashboardPage() {
   const streak = stats?.streak || 0;
   const userName = "Student"; // In production, get from auth context
 
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
   return (
     <>
-      <TopNavbar title="Dashboard" userInitials="ST" />
+      <TopNavbar 
+        title="Dashboard" 
+        userInitials="ST"
+        notifications={notifications}
+        isNotificationsConnected={isConnected}
+        onClearNotifications={handleClearNotifications}
+      />
       <div className="p-6 space-y-6">
         {/* ── Welcome ── */}
         <div>
@@ -191,6 +228,135 @@ export default function StudentDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Mark Today's Attendance ── */}
+        <Card className="border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <CardTitle>Today's Classes</CardTitle>
+              </div>
+              <Badge variant="default" className="bg-blue-600">
+                {todaysClasses?.filter(c => c.session_status === 'running').length || 0} Running
+              </Badge>
+            </div>
+            <CardDescription>
+              View your classes and mark attendance for running sessions
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {todaysLoading ? (
+              <div className="grid gap-3">
+                {[...Array(2)].map((_, i) => (
+                  <Skeleton key={i} className="h-24 rounded-lg" />
+                ))}
+              </div>
+            ) : todaysClasses && todaysClasses.length > 0 ? (
+              <div className="space-y-3">
+                {todaysClasses.map((cls) => {
+                  let badgeColor = "bg-gray-600";
+                  let statusIcon = "⏳";
+                  let statusText = "Upcoming";
+
+                  if (cls.session_status === "upcoming") {
+                    badgeColor = "bg-amber-600";
+                    statusIcon = "⏳";
+                    statusText = "Upcoming";
+                  } else if (cls.session_status === "running") {
+                    badgeColor = "bg-emerald-600";
+                    statusIcon = "🔴";
+                    statusText = "Running";
+                  } else if (cls.session_status === "completed") {
+                    badgeColor = "bg-slate-600";
+                    statusIcon = "✅";
+                    statusText = "Completed";
+                  }
+
+                  return (
+                    <div
+                      key={cls.id}
+                      className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-semibold text-sm text-foreground">
+                            {cls.subject_code}
+                          </h4>
+                          <Badge variant="default" className={badgeColor}>
+                            {statusIcon} {statusText}
+                          </Badge>
+                          {cls.has_marked_attendance && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            >
+                              ✓ Marked ({cls.attendance_status})
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          {cls.subject_name}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>🕐 {cls.start_time.substring(0, 5)} - {cls.end_time.substring(0, 5)}</span>
+                          <span>👨‍🏫 {cls.teacher_name}</span>
+                        </div>
+
+                        {/* Show confidence if already marked */}
+                        {cls.has_marked_attendance && cls.attendance_confidence !== null && cls.attendance_confidence !== undefined && (
+                          <div className="mt-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Recognition confidence: {(cls.attendance_confidence * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action based on status */}
+                      <div className="ml-4 flex-shrink-0">
+                        {cls.can_mark_attendance && !cls.has_marked_attendance ? (
+                          <StudentAttendanceMarker
+                            classSessionId={cls.id}
+                            attendanceSessionId={cls.attendance_session_id}
+                            className={cls.class_name}
+                            autoOpen={cls.session_status === "running"}
+                            onSuccess={() => refetchTodaysClasses()}
+                          />
+                        ) : cls.has_marked_attendance ? (
+                          <div className="text-center">
+                            <div className="text-2xl">✅</div>
+                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                              Marked
+                            </p>
+                          </div>
+                        ) : cls.session_status === "upcoming" ? (
+                          <div className="text-center">
+                            <div className="text-2xl">⏳</div>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                              Wait for start
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <div className="text-2xl">✓</div>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                              Ended
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No classes scheduled for today</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ── Upcoming Classes ── */}
         <Card>

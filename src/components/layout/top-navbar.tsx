@@ -1,19 +1,30 @@
 "use client";
 
 import React from "react";
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationPanel, type NotificationPanelProps } from "./notification-panel";
+import type { NotificationEvent } from "@/hooks/useNotifications";
 
 export function TopNavbar({
   title,
   userInitials = "U",
+  notifications,
+  isNotificationsConnected = false,
+  onClearNotifications,
 }: {
   title: string;
   userInitials?: string;
+  notifications?: NotificationEvent[];
+  isNotificationsConnected?: boolean;
+  onClearNotifications?: () => void;
 }) {
+  // Show notifications only if they're provided (students only)
+  const showNotifications = notifications !== undefined;
+
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-md">
       {/* ── Left Section ── */}
@@ -34,17 +45,17 @@ export function TopNavbar({
           />
         </div>
 
-        {/* Notifications */}
-        <button className="relative rounded-xl p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-          </span>
-        </button>
+        {/* Notifications - Only for students */}
+        {showNotifications && (
+          <NotificationPanel
+            notifications={notifications}
+            isConnected={isNotificationsConnected}
+            onClear={onClearNotifications}
+          />
+        )}
 
-        {/* Divider */}
-        <div className="h-6 w-px bg-border" />
+        {/* Divider - Only show if notifications are visible */}
+        {showNotifications && <div className="h-6 w-px bg-border" />}
 
         {/* Profile */}
         <button className="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-accent cursor-pointer">

@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,13 +121,13 @@ export default function TeacherDashboardPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      {isLoadingSessions || isLoadingAttendance ? (
+                    {isLoadingSessions || isLoadingAttendance ? (
+                      <div className="mt-1">
                         <Skeleton className="h-8 w-16" />
-                      ) : (
-                        stat.value
-                      )}
-                    </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-2xl font-bold text-foreground">{stat.value}</p>
+                    )}
                   </div>
                   <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.color}`}>
                     <stat.icon className="h-5 w-5" />
