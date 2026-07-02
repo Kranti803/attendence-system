@@ -24,16 +24,21 @@ export interface TodayClass {
 
 export const getTodaysClassesFn = async (): Promise<TodayClass[]> => {
   try {
+    console.log('Fetching todays classes...');
     const response = await apiClient.get<any>('/student-dashboard/todays_classes/');
     const data = response.data;
     
+    console.log('Received todays classes response:', data);
+    
     if (data.data && data.success !== undefined) {
+      console.log('Returning formatted data with', data.data.length, 'classes');
       return data.data as TodayClass[];
     }
     
+    console.log('Returning raw data with', data.length, 'classes');
     return data as TodayClass[];
   } catch (error) {
-    console.error('Error fetching today\'s classes:', error);
+    console.error('Error fetching todays classes:', error);
     throw error;
   }
 };
@@ -45,6 +50,6 @@ export const useTodaysClasses = () => {
     refetchInterval: 30000, // Refetch every 30 seconds to check session status
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    staleTime: 10000,
+    staleTime: 0,  // Always consider stale, so invalidate always triggers refetch
   });
 };

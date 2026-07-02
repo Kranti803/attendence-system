@@ -18,7 +18,6 @@ import {
   MapPin,
   GraduationCap,
   Calendar,
-  Pencil,
   Camera,
   Shield,
   BookOpen,
@@ -71,20 +70,14 @@ export default function StudentProfilePage() {
                 </button>
               </div>
               <div className="flex-1">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <h1 className="text-xl font-bold text-foreground">
-                      {fullName}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                      Student ID: {profile.roll_number}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Pencil className="h-4 w-4" />
-                    Edit Profile
-                  </Button>
-                </div>
+                <div>
+                <h1 className="text-xl font-bold text-foreground">
+                  {fullName}
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Student ID: {profile.roll_number}
+                </p>
+              </div>
               </div>
             </div>
           </CardContent>

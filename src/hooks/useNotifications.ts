@@ -83,9 +83,9 @@ export const useNotifications = (options: UseNotificationsOptions = {}) => {
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
-        console.log('✅ Connected to real-time notifications');
+        console.log('Connected to real-time notifications');
         setIsConnected(true);
-        reconnectAttemptsRef.current = 0; // Reset reconnect counter
+        reconnectAttemptsRef.current = 0;
       };
 
       wsRef.current.onmessage = (event) => {
@@ -93,7 +93,7 @@ export const useNotifications = (options: UseNotificationsOptions = {}) => {
           const data = JSON.parse(event.data) as NotificationEvent;
           lastEventRef.current = data;
 
-          console.log('📬 Notification received:', data.type, data);
+          console.log('Notification received:', data.type, data);
 
           switch (data.type) {
             case 'connection_established':
@@ -101,42 +101,49 @@ export const useNotifications = (options: UseNotificationsOptions = {}) => {
               break;
 
             case 'session_started':
-              console.log('🔴 Session started:', data.subject_code);
+              console.log('Session started:', data.subject_code);
               
-              // Refetch today's classes immediately
               if (autoRefetch) {
+                console.log('Invalidating todaysClasses query...');
                 queryClient.invalidateQueries({ queryKey: ['todaysClasses'] });
+                
+                console.log('Forcing refetch...');
+                queryClient.refetchQueries({ 
+                  queryKey: ['todaysClasses'],
+                  type: 'active'
+                }).then(() => {
+                  console.log('Query refetch completed');
+                  const data = queryClient.getQueryData(['todaysClasses']);
+                  console.log('Updated todaysClasses data:', data);
+                }).catch(err => {
+                  console.error('Refetch failed:', err);
+                });
               }
               
-              // Call custom handler
               if (onSessionStarted) {
                 onSessionStarted(data);
               }
               break;
 
             case 'session_ended':
-              console.log('✅ Session ended:', data.subject_code);
+              console.log('Session ended:', data.subject_code);
               
-              // Refetch to update status
               if (autoRefetch) {
                 queryClient.invalidateQueries({ queryKey: ['todaysClasses'] });
               }
               
-              // Call custom handler
               if (onSessionEnded) {
                 onSessionEnded(data);
               }
               break;
 
             case 'attendance_marked':
-              console.log('✓ Attendance marked:', data.subject_code, data.status);
+              console.log('Attendance marked:', data.subject_code, data.status);
               
-              // Refetch to show confidence score
               if (autoRefetch) {
                 queryClient.invalidateQueries({ queryKey: ['todaysClasses'] });
               }
               
-              // Call custom handler
               if (onAttendanceMarked) {
                 onAttendanceMarked(data);
               }
@@ -154,7 +161,7 @@ export const useNotifications = (options: UseNotificationsOptions = {}) => {
       };
 
       wsRef.current.onerror = () => {
-        console.error('❌ WebSocket error');
+        console.error('WebSocket error');
         setIsConnected(false);
         if (onError) {
           onError(new Error('WebSocket connection error'));

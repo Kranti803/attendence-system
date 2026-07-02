@@ -39,6 +39,16 @@ import { useClassSessions } from "@/hooks/useClassSession";
 import { useTeacherAttendance } from "@/hooks/useAttendance";
 import { useProfile } from "@/hooks/useAuth";
 
+// Helper function to convert 24-hour time to 12-hour format with AM/PM
+const formatTime12Hour = (timeStr: string): string => {
+  if (!timeStr) return "—";
+  const [hours, minutes] = timeStr.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minutes} ${ampm}`;
+};
+
 export default function TeacherDashboardPage() {
   const router = useRouter();
   
@@ -53,7 +63,7 @@ export default function TeacherDashboardPage() {
 
   const today = new Date().toISOString().split("T")[0];
   const now = new Date();
-  const currentTimeString = now.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
+  const currentTimeString = now.toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" });
 
   // ── Compute Today's Classes ──
   const todayClasses = classSessions
@@ -304,7 +314,7 @@ export default function TeacherDashboardPage() {
                           {item.status}
                         </Badge>
                         <p className="mt-1 text-[10px] text-muted-foreground font-mono">
-                          {new Date(item.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(item.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}
                         </p>
                       </div>
                     </div>
@@ -377,7 +387,7 @@ export default function TeacherDashboardPage() {
                           <span className="block text-xs text-muted-foreground font-normal mt-0.5">{cls.subject_name} ({cls.subject_code})</span>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
-                          {cls.start_time.slice(0, 5)} - {cls.end_time.slice(0, 5)}
+                          {formatTime12Hour(cls.start_time)} - {formatTime12Hour(cls.end_time)}
                         </TableCell>
                         <TableCell>
                           <Badge variant={badgeVariant}>

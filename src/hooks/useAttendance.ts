@@ -74,12 +74,14 @@ export const useEndAttendanceSession = () => {
 /**
  * Query: Get attendance records for a specific class session.
  * Only fetches when sessionId is provided.
+ * Polls every 5 seconds when isLive = true for real-time roster updates.
  */
-export const useClassAttendance = (sessionId: string | null) => {
+export const useClassAttendance = (sessionId: string | null, isLive = false) => {
   return useQuery<AttendanceRead[], Error>({
     queryKey: ['classAttendance', sessionId],
     queryFn: () => getClassAttendanceFn(sessionId!),
     enabled: !!sessionId,
+    refetchInterval: isLive ? 5000 : false,
   });
 };
 

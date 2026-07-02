@@ -1,6 +1,6 @@
 import axios, { InternalAxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://attendance-backend-d3vk.onrender.com/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://attendance-backend-d3vk.onrender.com';
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -42,7 +42,7 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Prevent retry loop if refresh token endpoint or login endpoint fails
-    if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/login/')) {
+    if (originalRequest.url?.includes('/login/') || originalRequest.url?.includes('/token/refresh')) {
       return Promise.reject(error);
     }
 

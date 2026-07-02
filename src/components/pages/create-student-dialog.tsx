@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ImagePlus, Camera, Play, Square, X } from "lucide-react";
+import { Plus, ChevronDown, ImagePlus, Camera, Play, Square, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 const departments = [
@@ -450,9 +450,10 @@ export function CreateStudentDialog() {
                   )}
 
                   {capturedFrames.length < 3 && capturedFrames.length > 0 && (
-                    <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                    <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/50 flex gap-2 items-start">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-amber-700 dark:text-amber-400">
-                        ⚠️ Capture at least {3 - capturedFrames.length} more frame(s) for better recognition.
+                        Capture at least {3 - capturedFrames.length} more frame(s) for better recognition.
                       </p>
                     </div>
                   )}

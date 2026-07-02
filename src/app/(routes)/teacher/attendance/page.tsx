@@ -29,6 +29,7 @@ import {
   ShieldAlert,
   Loader2,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,9 +47,20 @@ import {
 import {
   useMyTemplates,
   useCreateTemplate,
+  useDeleteTemplate,
 } from "@/hooks/useClassSessionTemplate";
 import { AttendanceSessionEndResponse } from "@/types/attendance";
 import { CreateClassSessionTemplatePayload } from "@/types/classSessionTemplate";
+
+// Helper function to convert 24-hour time to 12-hour format with AM/PM
+const formatTime12Hour = (timeStr: string): string => {
+  if (!timeStr) return "—";
+  const [hours, minutes] = timeStr.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minutes} ${ampm}`;
+};
 
 const EMPTY_TEMPLATE_FORM: CreateClassSessionTemplatePayload = {
   subject: "",
@@ -68,6 +80,7 @@ export default function TeacherAttendancePage() {
 
   // ── Live attendance session ───────────────────────────────────────────────
   const [liveSessionId, setLiveSessionId] = React.useState<string | null>(null);
+  const [lastSessionId, setLastSessionId] = React.useState<string | null>(null);
   const [sessionSummaryData, setSessionSummaryData] = React.useState<AttendanceSessionEndResponse['summary'] | null>(null);
 
   // ── Create template dialog ────────────────────────────────────────────────
@@ -82,16 +95,17 @@ export default function TeacherAttendancePage() {
   const { data: myTemplates = [], isLoading: isLoadingTemplates } = useMyTemplates();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
   const { mutate: createTemplate, isPending: isCreatingTemplate } = useCreateTemplate();
+  const { mutate: deleteTemplate, isPending: isDeletingTemplate } = useDeleteTemplate();
 
   const isSessionLive = sessionState === "running";
 
   const { data: sessionSummary } = useSessionSummary(
-    selectedTemplateId || null,
+    liveSessionId,
     isSessionLive,
   );
 
   const { data: classAttendance = [], isLoading: isLoadingAttendance } =
-    useClassAttendance(selectedTemplateId || null);
+    useClassAttendance(liveSessionId ?? lastSessionId, isSessionLive);
 
   const { mutate: startSession, isPending: isStartingSession } = useStartAttendanceSession();
   const { mutate: endSession, isPending: isEndingSession } = useEndAttendanceSession();
@@ -128,6 +142,7 @@ export default function TeacherAttendancePage() {
     startSession(selectedTemplateId, {
       onSuccess: (response) => {
         setLiveSessionId(response.id);
+        setLastSessionId(response.id);
         setSessionSummaryData(null);
         setElapsedSeconds(0);
         setSessionState("running");
@@ -175,9 +190,26 @@ export default function TeacherAttendancePage() {
   const handleReset = () => {
     setSessionState("idle");
     setLiveSessionId(null);
+    setLastSessionId(null);
     setSessionSummaryData(null);
     setElapsedSeconds(0);
     if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    if (confirm("Are you sure you want to delete this template? This cannot be undone.")) {
+      deleteTemplate(templateId, {
+        onSuccess: () => {
+          toast.success("Template deleted successfully");
+          if (selectedTemplateId === templateId) {
+            setSelectedTemplateId("");
+          }
+        },
+        onError: (err) => {
+          toast.error(err.message || "Failed to delete template");
+        },
+      });
+    }
   };
 
   // Cleanup on unmount
@@ -356,25 +388,44 @@ export default function TeacherAttendancePage() {
           <Card className="border-primary/20 bg-primary/5 shadow-sm">
             <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-4">
               <div className="flex-1 w-full relative">
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-4 pr-10 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                >
-                  <option value="" disabled>
-                    {isLoadingTemplates
-                      ? "Loading templates…"
-                      : myTemplates.length === 0
-                        ? "No templates — please create one"
-                        : "Select a recurring class…"}
-                  </option>
-                  {myTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.subject_code} · {template.day_of_week_display} {template.start_time.slice(0, 5)}-{template.end_time.slice(0, 5)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1 relative">
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                      className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-4 pr-10 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                    >
+                      <option value="" disabled>
+                        {isLoadingTemplates
+                          ? "Loading templates…"
+                          : myTemplates.length === 0
+                            ? "No templates — please create one"
+                            : "Select a recurring class…"}
+                      </option>
+                      {myTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.subject_code} · {template.day_of_week_display} {formatTime12Hour(template.start_time)}-{formatTime12Hour(template.end_time)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                  {selectedTemplateId && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isDeletingTemplate}
+                      onClick={() => handleDeleteTemplate(selectedTemplateId)}
+                      title="Delete this template"
+                    >
+                      {isDeletingTemplate ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
               <Button
                 size="lg"
@@ -385,6 +436,53 @@ export default function TeacherAttendancePage() {
                 {isStartingSession ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5 fill-current" />}
                 Start Session
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Template Management Section ── */}
+        {myTemplates.length > 0 && sessionState === "idle" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                My Templates
+              </CardTitle>
+              <CardDescription>
+                Manage your recurring class templates
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {myTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">
+                        {template.subject_code} - {template.subject_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {template.day_of_week_display} • {formatTime12Hour(template.start_time)}-{formatTime12Hour(template.end_time)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isDeletingTemplate}
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      title="Delete this template"
+                    >
+                      {isDeletingTemplate ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -500,7 +598,7 @@ export default function TeacherAttendancePage() {
                       {selectedTemplate.subject_code} - {selectedTemplate.subject_name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {selectedTemplate.day_of_week_display} • {selectedTemplate.start_time.slice(0, 5)}-{selectedTemplate.end_time.slice(0, 5)}
+                      {selectedTemplate.day_of_week_display} • {formatTime12Hour(selectedTemplate.start_time)}-{formatTime12Hour(selectedTemplate.end_time)}
                     </p>
                   </div>
                 )}
@@ -610,7 +708,7 @@ export default function TeacherAttendancePage() {
                             {record.status}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
-                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}
                           </p>
                         </div>
                       </div>
@@ -650,7 +748,7 @@ export default function TeacherAttendancePage() {
                             {record.status}
                           </p>
                           <p className="text-[10px] text-muted-foreground block">
-                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(record.marked_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}
                           </p>
                         </div>
                       </div>

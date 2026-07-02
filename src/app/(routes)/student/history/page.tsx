@@ -43,6 +43,16 @@ import { getStatusBadgeVariant } from "@/lib/badge-colors";
 import { format } from "date-fns";
 import { useAttendanceHistory, useEnrolledSubjects } from "@/hooks/useStudentDashboard";
 
+// Helper function to convert 24-hour time to 12-hour format with AM/PM
+const formatTime12Hour = (timeStr: string): string => {
+  if (!timeStr) return "—";
+  const [hours, minutes] = timeStr.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minutes} ${ampm}`;
+};
+
 export default function AttendanceHistoryPage() {
   // State for filters
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -58,7 +68,7 @@ export default function AttendanceHistoryPage() {
   // Fetch data
   const { data: enrolledResponse } = useEnrolledSubjects();
   const courses = enrolledResponse?.subjects || [];
-  
+
   const historyParams = {
     search: searchQuery || undefined,
     subject_id: subjectFilter || undefined,
@@ -239,16 +249,18 @@ export default function AttendanceHistoryPage() {
                   Start Date
                 </label>
                 <Popover>
-                  <PopoverTrigger >
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {startDate ? format(new Date(startDate), "MMM dd, yyyy") : "Pick date"}
-                      </span>
-                    </Button>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      />
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {startDate ? format(new Date(startDate), "MMM dd, yyyy") : "Pick date"}
+                    </span>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
@@ -274,16 +286,18 @@ export default function AttendanceHistoryPage() {
                   End Date
                 </label>
                 <Popover>
-                  <PopoverTrigger >
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {endDate ? format(new Date(endDate), "MMM dd, yyyy") : "Pick date"}
-                      </span>
-                    </Button>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      />
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {endDate ? format(new Date(endDate), "MMM dd, yyyy") : "Pick date"}
+                    </span>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
@@ -425,7 +439,7 @@ export default function AttendanceHistoryPage() {
                               {record.date}
                             </TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">
-                              {record.time}
+                              {formatTime12Hour(record.time)}
                             </TableCell>
                             <TableCell className="text-sm">
                               <div>

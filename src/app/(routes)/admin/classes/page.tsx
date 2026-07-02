@@ -15,39 +15,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Calendar,
   ChevronDown,
   Clock,
   Download,
-  Filter,
+  Info,
   Loader2,
-  Pencil,
-  Plus,
   Search,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  useClassSessions,
-  useCreateClassSession,
-  useUpdateClassSession,
-  useDeleteClassSession,
   useClassSessionsWithFilters,
   useExportClassSessionsExcel,
 } from "@/hooks/useClassSession";
 import { useSubjects } from "@/hooks/useSubject";
-import { ClassSession } from "@/types/classSession";
 
 const formatTime = (t: string) => {
   if (!t) return "—";
@@ -57,37 +39,13 @@ const formatTime = (t: string) => {
   return `${hour % 12 || 12}:${m} ${ampm}`;
 };
 
-const EMPTY_FORM = {
-  class_name: "",
-  subject: "",
-  date: "",
-  start_time: "",
-  end_time: "",
-};
-
 export default function AdminClassesPage() {
-  const [open, setOpen] = React.useState(false);
-  const [editingSession, setEditingSession] =
-    React.useState<ClassSession | null>(null);
-
-  const [deleteTarget, setDeleteTarget] = React.useState<ClassSession | null>(
-    null,
-  );
-
   const [searchTerm, setSearchTerm] = React.useState("");
   const [sortBy, setSortBy] = React.useState("date");
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 10;
 
-  const [formData, setFormData] = React.useState(EMPTY_FORM);
-
-  const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
-  const { mutate: createSession, isPending: isCreating } =
-    useCreateClassSession();
-  const { mutate: updateSession, isPending: isUpdating } =
-    useUpdateClassSession();
-  const { mutate: deleteSession, isPending: isDeleting } =
-    useDeleteClassSession();
+  const { data: subjects = [] } = useSubjects();
   const { mutate: exportExcel, isPending: isExporting } =
     useExportClassSessionsExcel();
 
@@ -101,8 +59,6 @@ export default function AdminClassesPage() {
   const sessions = sessionsData?.results || [];
   const totalCount = sessionsData?.count || 0;
   const totalPages = Math.ceil(totalCount / itemsPerPage);
-
-  const isPending = isCreating || isUpdating;
 
   const handleExportExcel = () => {
     exportExcel(
@@ -147,253 +103,44 @@ export default function AdminClassesPage() {
     setCurrentPage(1);
   };
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-  const resetForm = () => setFormData(EMPTY_FORM);
-
-  const openCreate = () => {
-    setEditingSession(null);
-    resetForm();
-    setOpen(true);
-  };
-
-  const openEdit = (session: ClassSession) => {
-    setEditingSession(session);
-    setFormData({
-      class_name: session.class_name,
-      subject: session.subject,
-      date: session.date,
-      start_time: session.start_time.slice(0, 5), // HH:MM
-      end_time: session.end_time.slice(0, 5),
-    });
-    setOpen(true);
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const payload = {
-      class_name: formData.class_name,
-      subject: formData.subject,
-      date: formData.date,
-      start_time: formData.start_time,
-      end_time: formData.end_time,
-    };
-
-    if (editingSession) {
-      updateSession(
-        { id: editingSession.id, payload },
-        {
-          onSuccess: () => {
-            setOpen(false);
-            resetForm();
-            toast.success("Class session updated successfully");
-          },
-          onError: (err) => toast.error(err.message),
-        },
-      );
-    } else {
-      createSession(payload, {
-        onSuccess: () => {
-          setOpen(false);
-          resetForm();
-          toast.success("Class session created successfully");
-        },
-        onError: (err) => toast.error(err.message),
-      });
-    }
-  };
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    deleteSession(deleteTarget.id, {
-      onSuccess: () => {
-        setDeleteTarget(null);
-        toast.success("Class session deleted successfully");
-      },
-      onError: (err) => toast.error(err.message),
-    });
-  };
-
   return (
     <>
       <TopNavbar title="Classes" userInitials="AU" />
       <div className="p-6 space-y-6">
+        {/* ── Info Banner ─────────────────────────────────────────────────── */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
+          <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-blue-900">
+              Classes are created automatically from Session Templates
+            </p>
+            <p className="text-xs text-blue-800">
+              Teachers define recurring schedules (e.g., Monday 9 AM) in Session Templates. The system automatically creates class sessions for each occurrence. Learn more in the <a href="/help" className="underline">help documentation</a>.
+            </p>
+          </div>
+        </div>
+
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Classes</h1>
+            <h1 className="text-2xl font-bold text-foreground">Class Sessions</h1>
             <p className="text-sm text-muted-foreground">
-              Create class sessions, assign subjects, and manage schedules.
+              Auto-generated class sessions from recurring templates.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportExcel}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              {isExporting ? "Exporting..." : "Export"}
-            </Button>
-
-            {/* ── Create / Edit Dialog ───────────────────────────────────── */}
-            <Dialog
-              open={open}
-              onOpenChange={(v) => {
-                setOpen(v);
-                if (!v) resetForm();
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button size="sm" onClick={openCreate}>
-                  <Plus className="h-4 w-4" />
-                  Create Class
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-w-2xl max-h-[calc(100svh-2rem)] overflow-y-auto">
-                <form onSubmit={handleSubmit}>
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingSession
-                        ? "Edit Class Session"
-                        : "Create Class Session"}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingSession
-                        ? "Update the session details below."
-                        : "Define a specific class session where attendance will be taken."}{" "}
-                      Fields marked{" "}
-                      <span className="font-medium text-foreground">*</span> are
-                      required.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="mt-5 grid gap-6">
-                    {/* Core Info */}
-                    <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Core Info
-                      </p>
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2 sm:col-span-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Class Name / Section{" "}
-                            <span className="text-destructive">*</span>
-                          </label>
-                          <Input
-                            name="class_name"
-                            value={formData.class_name}
-                            onChange={handleInputChange}
-                            placeholder='e.g. "CS101 — Section A"'
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2 sm:col-span-2">
-                          <label className="text-sm font-medium text-foreground">
-                            Subject <span className="text-destructive">*</span>
-                          </label>
-                          <div className="relative">
-                            <select
-                              name="subject"
-                              value={formData.subject}
-                              onChange={handleInputChange}
-                              required
-                              className="h-10 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="" disabled>
-                                {isLoadingSubjects
-                                  ? "Loading subjects…"
-                                  : "Select subject…"}
-                              </option>
-                              {subjects.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name} ({s.code})
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Schedule Info */}
-                    <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-semibold text-foreground">
-                        Schedule
-                      </p>
-                      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                        <div className="space-y-2 sm:col-span-1">
-                          <label className="text-sm font-medium text-foreground">
-                            Date <span className="text-destructive">*</span>
-                          </label>
-                          <Input
-                            name="date"
-                            type="date"
-                            value={formData.date}
-                            onChange={handleInputChange}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-1">
-                          <label className="text-sm font-medium text-foreground">
-                            Start Time{" "}
-                            <span className="text-destructive">*</span>
-                          </label>
-                          <Input
-                            name="start_time"
-                            type="time"
-                            value={formData.start_time}
-                            onChange={handleInputChange}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-1">
-                          <label className="text-sm font-medium text-foreground">
-                            End Time <span className="text-destructive">*</span>
-                          </label>
-                          <Input
-                            name="end_time"
-                            type="time"
-                            value={formData.end_time}
-                            onChange={handleInputChange}
-                            required
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <DialogFooter className="mt-6">
-                    <DialogClose asChild>
-                      <Button type="button" variant="outline">
-                        Cancel
-                      </Button>
-                    </DialogClose>
-                    <Button type="submit" disabled={isPending}>
-                      {isPending && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      {editingSession ? "Save Changes" : "Create Session"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            {isExporting ? "Exporting..." : "Export"}
+          </Button>
         </div>
 
         {/* ── Search / Filter ──────────────────────────────────────────────── */}
@@ -459,13 +206,12 @@ export default function AdminClassesPage() {
                   </TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Teacher</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <div className="flex items-center justify-center">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
                         <span className="text-muted-foreground">
@@ -476,7 +222,7 @@ export default function AdminClassesPage() {
                   </TableRow>
                 ) : sessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <p className="text-muted-foreground">
                         No class sessions found.
                       </p>
@@ -543,28 +289,6 @@ export default function AdminClassesPage() {
                           )}
                         </div>
                       </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openEdit(session)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setDeleteTarget(session)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -602,42 +326,6 @@ export default function AdminClassesPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* ── Delete Confirmation Dialog ──────────────────────────────────────── */}
-      <Dialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => {
-          if (!v) setDeleteTarget(null);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Class Session</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-foreground">
-                {deleteTarget?.class_name}
-              </span>
-              ? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-2">
-            <DialogClose asChild>
-              <Button variant="outline" disabled={isDeleting}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

@@ -11,12 +11,22 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Clock, BookOpen, MapPin, Flame } from "lucide-react";
+import { Calendar, Clock, BookOpen, MapPin, Flame, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentOverallStats, useStudentCourseAttendance, useUpcomingClasses } from "@/hooks/useStudentDashboard";
 import { useTodaysClasses } from "@/hooks/useTodaysClasses";
 import { StudentAttendanceMarker } from "@/components/attendance/StudentAttendanceMarker";
 import { useNotifications, type NotificationEvent } from "@/hooks/useNotifications";
+
+// Helper function to convert 24-hour time to 12-hour format with AM/PM
+const formatTime12Hour = (timeStr: string): string => {
+  if (!timeStr) return "—";
+  const [hours, minutes] = timeStr.split(":");
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minutes} ${ampm}`;
+};
 
 /* ─── Donut Chart Component ─── */
 function OverallAttendanceDonut({ value }: { value: number }) {
@@ -67,19 +77,22 @@ export default function StudentDashboardPage() {
   // Connect to real-time notifications and get connection status
   const { isConnected } = useNotifications({
     onSessionStarted: (event) => {
-      console.log('📬 Notification: Session started', event.subject_code);
+      console.log('Session started:', event.subject_code);
       setNotifications(prev => [event, ...prev]);
-      // Explicitly refetch to show running session immediately
-      refetchTodaysClasses();
+      
+      setTimeout(() => {
+        refetchTodaysClasses();
+      }, 100);
     },
     onSessionEnded: (event) => {
-      console.log('📬 Notification: Session ended', event.subject_code);
+      console.log('Session ended:', event.subject_code);
       setNotifications(prev => [event, ...prev]);
-      // Explicitly refetch to update status
-      refetchTodaysClasses();
+      setTimeout(() => {
+        refetchTodaysClasses();
+      }, 100);
     },
     onAttendanceMarked: (event) => {
-      console.log('📬 Notification: Attendance marked', event.subject_code);
+      console.log('Attendance marked:', event.subject_code);
       setNotifications(prev => [event, ...prev]);
     },
     autoRefetch: true,
@@ -88,8 +101,7 @@ export default function StudentDashboardPage() {
   const overallAttendance = stats?.semester_attendance_rate || 0;
   const classesAttended = stats?.classes_attended || 0;
   const classesMissed = stats?.classes_missed || 0;
-  const streak = stats?.streak || 0;
-  const userName = "Student"; // In production, get from auth context
+  const userName = "Student";
 
   const handleClearNotifications = () => {
     setNotifications([]);
@@ -108,7 +120,7 @@ export default function StudentDashboardPage() {
         {/* ── Welcome ── */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, {userName}! 👋
+            Welcome back, {userName}!
           </h1>
           <p className="text-sm text-muted-foreground">
             Here&apos;s an overview of your attendance this semester.
@@ -140,12 +152,6 @@ export default function StudentDashboardPage() {
                       <p className="text-xs text-red-700">Classes Missed</p>
                     </div>
                   </div>
-                  {streak > 0 && (
-                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-700">
-                      <Flame className="h-4 w-4" />
-                      <span>{streak} day streak! 🔥</span>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -256,20 +262,20 @@ export default function StudentDashboardPage() {
               <div className="space-y-3">
                 {todaysClasses.map((cls) => {
                   let badgeColor = "bg-gray-600";
-                  let statusIcon = "⏳";
+                  let statusIcon: React.ReactNode = null;
                   let statusText = "Upcoming";
 
                   if (cls.session_status === "upcoming") {
                     badgeColor = "bg-amber-600";
-                    statusIcon = "⏳";
+                    statusIcon = <Clock className="h-5 w-5" />;
                     statusText = "Upcoming";
                   } else if (cls.session_status === "running") {
                     badgeColor = "bg-emerald-600";
-                    statusIcon = "🔴";
+                    statusIcon = <Flame className="h-5 w-5" />;
                     statusText = "Running";
                   } else if (cls.session_status === "completed") {
                     badgeColor = "bg-slate-600";
-                    statusIcon = "✅";
+                    statusIcon = <CheckCircle className="h-5 w-5" />;
                     statusText = "Completed";
                   }
 
@@ -291,7 +297,8 @@ export default function StudentDashboardPage() {
                               variant="secondary"
                               className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
                             >
-                              ✓ Marked ({cls.attendance_status})
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Marked ({cls.attendance_status})
                             </Badge>
                           )}
                         </div>
@@ -299,8 +306,11 @@ export default function StudentDashboardPage() {
                           {cls.subject_name}
                         </p>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>🕐 {cls.start_time.substring(0, 5)} - {cls.end_time.substring(0, 5)}</span>
-                          <span>👨‍🏫 {cls.teacher_name}</span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatTime12Hour(cls.start_time)} - {formatTime12Hour(cls.end_time)}
+                          </span>
+                          <span>{cls.teacher_name}</span>
                         </div>
 
                         {/* Show confidence if already marked */}
@@ -320,26 +330,25 @@ export default function StudentDashboardPage() {
                             classSessionId={cls.id}
                             attendanceSessionId={cls.attendance_session_id}
                             className={cls.class_name}
-                            autoOpen={cls.session_status === "running"}
                             onSuccess={() => refetchTodaysClasses()}
                           />
                         ) : cls.has_marked_attendance ? (
                           <div className="text-center">
-                            <div className="text-2xl">✅</div>
+                            <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto" />
                             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                               Marked
                             </p>
                           </div>
                         ) : cls.session_status === "upcoming" ? (
                           <div className="text-center">
-                            <div className="text-2xl">⏳</div>
+                            <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400 mx-auto" />
                             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                               Wait for start
                             </p>
                           </div>
                         ) : (
                           <div className="text-center">
-                            <div className="text-2xl">✓</div>
+                            <CheckCircle className="h-8 w-8 text-slate-600 dark:text-slate-400 mx-auto" />
                             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                               Ended
                             </p>
@@ -399,7 +408,7 @@ export default function StudentDashboardPage() {
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{cls.start_time.substring(0, 5)}</span>
+                        <span className="truncate">{formatTime12Hour(cls.start_time)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <MapPin className="h-3.5 w-3.5 shrink-0" />

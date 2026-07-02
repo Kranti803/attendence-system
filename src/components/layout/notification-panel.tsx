@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Bell, AlertCircle, CheckCircle } from "lucide-react";
+import { Bell, AlertCircle, CheckCircle, Wifi, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationEvent } from "@/hooks/useNotifications";
 
@@ -150,7 +150,7 @@ export function NotificationPanel({
                       </p>
                       {notification.timestamp && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(notification.timestamp).toLocaleTimeString()}
+                          {new Date(notification.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}
                         </p>
                       )}
                       {notification.confidence !== undefined && (
@@ -166,8 +166,18 @@ export function NotificationPanel({
           )}
         </div>
 
-        <div className="border-t px-4 py-2 text-xs text-muted-foreground text-center">
-          {isConnected ? "✅ Connected" : "⚠️ Reconnecting..."}
+        <div className="border-t px-4 py-2 text-xs text-muted-foreground text-center flex items-center justify-center gap-2">
+          {isConnected ? (
+            <>
+              <Wifi className="h-3 w-3 text-green-500" />
+              Connected
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3 w-3 text-yellow-500" />
+              Reconnecting...
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>
