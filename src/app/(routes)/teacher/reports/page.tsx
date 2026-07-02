@@ -209,16 +209,18 @@ export default function TeacherReportsPage() {
               <div className="min-w-0">
                 <label className="text-sm font-medium text-foreground block mb-2">Start Date</label>
                 <Popover>
-                  <PopoverTrigger>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {format(new Date(startDate), "MMM dd, yyyy")}
-                      </span>
-                    </Button>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      />
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {format(new Date(startDate), "MMM dd, yyyy")}
+                    </span>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
@@ -241,16 +243,18 @@ export default function TeacherReportsPage() {
               <div className="min-w-0">
                 <label className="text-sm font-medium text-foreground block mb-2">End Date</label>
                 <Popover>
-                  <PopoverTrigger>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {format(new Date(endDate), "MMM dd, yyyy")}
-                      </span>
-                    </Button>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      />
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {format(new Date(endDate), "MMM dd, yyyy")}
+                    </span>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
