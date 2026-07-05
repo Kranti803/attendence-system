@@ -8,6 +8,7 @@ interface UseAttendanceStreamOptions {
   onConnected?: () => void;
   onError?: (error: string) => void;
   frameInterval?: number; // ms between frames (default 300ms)
+  onFacesUpdate?: (faces: FaceOverlay[]) => void; // Direct callback for instant drawing (bypasses state)
 }
 
 interface UseAttendanceStreamReturn {
@@ -25,17 +26,26 @@ export const useAttendanceStream = ({
   onConnected,
   onError,
   frameInterval = 300,
+  onFacesUpdate,
 }: UseAttendanceStreamOptions): UseAttendanceStreamReturn => {
   const wsRef = useRef<WebSocket | null>(null);
   const onDetectedRef = useRef(onDetected);
   const onConnectedRef = useRef(onConnected);
   const onErrorRef = useRef(onError);
+  const onFacesUpdateRef = useRef(onFacesUpdate);
   const lastErrorRef = useRef<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detectedStudents, setDetectedStudents] = useState<DetectedStudent[]>([]);
   const [faces, setFaces] = useState<FaceOverlay[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onDetectedRef.current = onDetected;
+    onConnectedRef.current = onConnected;
+    onErrorRef.current = onError;
+    onFacesUpdateRef.current = onFacesUpdate;
+  }, [onDetected, onConnected, onError, onFacesUpdate]);
 
   useEffect(() => {
     onDetectedRef.current = onDetected;
@@ -90,12 +100,17 @@ export const useAttendanceStream = ({
 
         switch (message.type) {
           case 'frame_processed': {
-            // Every time ANY frame result arrives, reset the stale timer.
-            // This means boxes only clear if the backend goes SILENT for 2s.
             resetStaleTimer();
 
-            // Update face bounding boxes on every frame (replaces, not accumulates)
-            setFaces(message.faces ?? []);
+            const newFaces = message.faces ?? [];
+            
+            // INSTANT: Call the callback immediately (bypasses React state batching)
+            if (onFacesUpdateRef.current) {
+              onFacesUpdateRef.current(newFaces);
+            }
+            
+            // Still update state for backward compatibility
+            setFaces(newFaces);
 
             const raw = message.newly_detected || [];
             if (raw.length > 0) {
@@ -204,7 +219,7 @@ export const useAttendanceCameraStream = (
   videoRef: React.RefObject<HTMLVideoElement | null>,
   isStreaming: boolean,
   sendFrame: (data: string) => void,
-  interval: number = 150
+  interval: number = 300
 ) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -212,7 +227,7 @@ export const useAttendanceCameraStream = (
   useEffect(() => {
     if (!isStreaming || !videoRef.current) return;
 
-    // Create offscreen canvas — smaller = faster transmission to Render
+    // Create offscreen canvas — smaller = faster transmission
     const canvas = document.createElement('canvas');
     canvas.width = 480;
     canvas.height = 360;
@@ -225,8 +240,6 @@ export const useAttendanceCameraStream = (
       if (!ctx) return;
 
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      // 0.6 quality keeps file size small; HOG operates on grayscale so quality
-      // beyond 0.65 yields diminishing returns on recognition accuracy.
       const frameData = canvasRef.current.toDataURL('image/jpeg', 0.6);
       sendFrame(frameData);
     }, interval);
