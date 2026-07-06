@@ -230,6 +230,8 @@ export default function AdminDashboardPage() {
         // Single API call to backend for ALL stats
         const dashboardStats = await getDashboardStatsFn();
 
+        console.log('Dashboard stats received:', dashboardStats);
+
         // Safety check
         if (!dashboardStats) {
           throw new Error('No data received from dashboard API');

@@ -87,6 +87,10 @@ export default function TeacherAttendancePage() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [templateForm, setTemplateForm] = React.useState(EMPTY_TEMPLATE_FORM);
 
+  // ── Delete confirmation modal ─────────────────────────────────────────────
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+  const [templateToDelete, setTemplateToDelete] = React.useState<string | null>(null);
+
   // ── Elapsed timer ─────────────────────────────────────────────────────────
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -197,16 +201,25 @@ export default function TeacherAttendancePage() {
   };
 
   const handleDeleteTemplate = (templateId: string) => {
-    if (confirm("Are you sure you want to delete this template? This cannot be undone.")) {
-      deleteTemplate(templateId, {
+    setTemplateToDelete(templateId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (templateToDelete) {
+      deleteTemplate(templateToDelete, {
         onSuccess: () => {
           toast.success("Template deleted successfully");
-          if (selectedTemplateId === templateId) {
+          if (selectedTemplateId === templateToDelete) {
             setSelectedTemplateId("");
           }
+          setDeleteConfirmOpen(false);
+          setTemplateToDelete(null);
         },
         onError: (err) => {
           toast.error(err.message || "Failed to delete template");
+          setDeleteConfirmOpen(false);
+          setTemplateToDelete(null);
         },
       });
     }
@@ -760,6 +773,47 @@ export default function TeacherAttendancePage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Template?
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The template will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-destructive/10 border border-destructive/30 p-3 rounded-lg">
+            <p className="text-sm text-destructive/90 font-medium">
+              {myTemplates.find(t => t.id === templateToDelete)?.subject_code} - {myTemplates.find(t => t.id === templateToDelete)?.subject_name}
+            </p>
+            <p className="text-xs text-destructive/70 mt-1">
+              {myTemplates.find(t => t.id === templateToDelete)?.day_of_week_display} • {formatTime12Hour(myTemplates.find(t => t.id === templateToDelete)?.start_time || "")}
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingTemplate}
+              onClick={confirmDelete}
+            >
+              {isDeletingTemplate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

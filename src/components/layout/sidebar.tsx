@@ -16,9 +16,6 @@ import {
   User,
   ScanFace,
   ChevronsUpDown,
-  BadgeCheck,
-  Bell,
-  CreditCard,
   LogOut,
   BookUser,
   type LucideIcon,
@@ -217,21 +214,6 @@ export function Sidebar({ role }: { role: "admin" | "teacher" | "student" }) {
                       </div>
                     </div>
                   </DropdownMenuLabel>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem>
-                    <BadgeCheck />
-                    Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <CreditCard />
-                    Billing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Bell />
-                    Notifications
-                  </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} disabled={logoutMutation.isPending}>

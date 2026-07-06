@@ -197,17 +197,11 @@ export default function StudentProfilePage() {
         {/* ── Face Recognition Data ── */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Face Recognition Data</CardTitle>
-                <CardDescription>
-                  Your registered face data for attendance recognition
-                </CardDescription>
-              </div>
-              <Button variant="outline" size="sm">
-                <Camera className="h-4 w-4" />
-                Re-register Face
-              </Button>
+            <div>
+              <CardTitle>Face Recognition Data</CardTitle>
+              <CardDescription>
+                Your registered face data for attendance recognition
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent>

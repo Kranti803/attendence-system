@@ -235,8 +235,11 @@ export default function StudentSubjectsPage() {
                             <TableCell className="font-medium max-w-xs truncate">
                               {subject.subject_name}
                             </TableCell>
-                            <TableCell className="text-sm max-w-xs truncate">
-                              {subject.teacher_name}
+                            <TableCell className="text-sm max-w-xs">
+                              <div className="flex flex-col">
+                                <span className="font-medium">{subject.teacher_name}</span>
+                                <span className="text-xs text-muted-foreground">{subject.teacher_email}</span>
+                              </div>
                             </TableCell>
                             <TableCell className="text-sm">
                               {subject.department}
@@ -287,9 +290,10 @@ export default function StudentSubjectsPage() {
                             <p className="text-sm font-medium truncate">
                               {subject.subject_name}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate mt-1">
-                              {subject.teacher_name}
-                            </p>
+                            <div className="mt-1">
+                              <p className="text-xs font-medium">{subject.teacher_name}</p>
+                              <p className="text-xs text-muted-foreground">{subject.teacher_email}</p>
+                            </div>
                             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                               <span>{subject.classes_attended}/{subject.total_classes}</span>
                               <span>{subject.department}</span>

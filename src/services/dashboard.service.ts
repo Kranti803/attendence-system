@@ -41,7 +41,13 @@ export interface WeeklyAttendanceData {
 export const getDashboardStatsFn = async (): Promise<DashboardStats> => {
   try {
     const response = await apiClient.get('/dashboard/stats/');
-    return response.data;
+    console.log('Raw API response:', response.data);
+    
+    // Handle response wrapper if it exists
+    const data = response.data?.data || response.data;
+    console.log('Extracted data:', data);
+    
+    return data;
   } catch (error) {
     console.error('Failed to fetch dashboard stats:', error);
     return {
